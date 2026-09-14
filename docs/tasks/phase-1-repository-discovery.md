@@ -1,7 +1,7 @@
-# Task: Phase 1 — Repository Discovery (DRAFT — not approved to start)
+# Task: Phase 1 — Repository Discovery (IMPLEMENTED — pending human review)
 
-> Per `docs/project-status.md`: Phase 0 must be signed off by a human before this task begins.
-> This draft exists so Phase 1 scope is visible during Phase 0 review, not as a green light.
+> Phase 0 was signed off by amit13091992@gmail.com. Implementation is complete and tested; see
+> ADR-0005 for the implementation decisions and `docs/project-status.md` for current status.
 
 ## Objective
 
@@ -54,12 +54,25 @@ bypass it with ad hoc options.
 
 ## Tests
 
-Fixture repositories under `fixtures/` (to be added) covering: a plain Node/Express repo, a
-NestJS repo, a Next.js repo, a React Native repo, a monorepo with multiple package managers, and a
-repo with generated code (e.g. a `dist/` or `*.generated.ts` pattern) to verify classification.
+Fixture repositories under `fixtures/project-model/`: `node-express` (npm), `nestjs-app` (pnpm),
+`nextjs-app` (yarn), `react-native-app` (bun), `monorepo-pnpm` (2 workspace packages, express +
+react), `generated-code` (dist/, `*.generated.ts`, Dockerfile, GitHub Actions workflow, SQL
+migration, README — exercises every `SourceClassification`). 12 tests total in
+`tests/project-model/`: 7 classification/detection tests + 1 determinism test
+(`discover.test.ts`), and 2 true end-to-end tests running real discovery through the actual
+`AnalyzerClient.scan()` lifecycle with a real `Analyzer` (`end-to-end.test.ts`).
 
 ## Acceptance criteria
 
-- [ ] `RepositoryDiscoverer` implemented and exported from `@code-analyzer/project-model`.
-- [ ] Fixture tests pass for every framework/package-manager combination listed above.
-- [ ] `docs/project-status.md` updated to move this task from "next approved" to "completed".
+- [x] `RepositoryDiscoverer` implemented and exported from `@code-analyzer/project-model`
+      (`projectModelDiscoverer`).
+- [x] Fixture tests pass for every framework/package-manager combination listed above.
+- [x] End-to-end: real discovery wired into `AnalyzerClient`/`ScanEngine`, exercised by a real
+      `Analyzer` reading `context.project.files` — not just discoverer-in-isolation tests.
+- [x] `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint` all pass clean across the whole
+      workspace (this task also fixed a pre-existing `tsc -b --noEmit` + composite-project-
+      references bug in every package's `typecheck` script, surfaced by actually running
+      `pnpm typecheck` end-to-end for the first time).
+- [x] `docs/project-status.md` updated to move this task from "next approved" to "completed".
+- [ ] Human review of the implementation (classification rules, workspace-glob scope, ADR-0005's
+      decisions) before Phase 2 is drafted for approval.

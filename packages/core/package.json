@@ -15,7 +15,7 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist *.tsbuildinfo",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

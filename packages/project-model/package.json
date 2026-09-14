@@ -9,13 +9,14 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist *.tsbuildinfo",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@code-analyzer/core": "workspace:*"
+    "@code-analyzer/core": "workspace:*",
+    "ignore": "^7.0.9"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "@types/node": "^20.14.0"
+    "@types/node": "^20.14.0",
+    "typescript": "^5.6.0"
   }
 }

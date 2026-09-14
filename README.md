@@ -15,16 +15,19 @@ primary detection mechanism.
 
 ## Status
 
-**Phase 0 — Foundation & Contracts.** The domain model, core contracts, and analyzer lifecycle are
-in place; no concrete analysis rules exist yet. See [`docs/project-status.md`](docs/project-status.md)
-for the authoritative, up-to-date state before starting any substantial work.
+**Phase 1 — Repository Intelligence.** Phase 0 (domain model, core contracts, analyzer lifecycle)
+is signed off. Phase 1's `RepositoryDiscoverer` — filesystem discovery, file classification,
+package-manager/workspace detection, framework detection — is implemented and tested end-to-end
+through the real `AnalyzerClient` lifecycle. No concrete analysis rules exist yet (that's Phase 5+).
+See [`docs/project-status.md`](docs/project-status.md) for the authoritative, up-to-date state
+before starting any substantial work.
 
 ## Packages
 
 | Package | Purpose |
 |---|---|
 | `@code-analyzer/core` | Domain model, contracts, and the `ScanEngine` lifecycle. Zero dependencies on other workspace packages, no analysis logic. |
-| `@code-analyzer/project-model` | Repository discovery -> normalized `ProjectModel` (Phase 1). |
+| `@code-analyzer/project-model` | Repository discovery -> normalized `ProjectModel` (Phase 1, implemented). |
 | `@code-analyzer/parser` | AST / semantic source model (Phase 2). |
 | `@code-analyzer/graph` | Module, dependency, call, and taint graphs (Phase 3-5). |
 | `@code-analyzer/analyzers` | Individual analysis rules (security, architecture, quality, performance, dependency, secrets, infrastructure). |

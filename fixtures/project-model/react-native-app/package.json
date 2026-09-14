@@ -1,0 +1,9 @@
+{
+  "name": "fixture-react-native-app",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "react": "^18.3.0",
+    "react-native": "^0.74.0"
+  }
+}

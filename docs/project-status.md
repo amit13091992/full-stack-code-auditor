@@ -6,13 +6,13 @@ that decision is made by a human and recorded here.
 
 ## Current phase
 
-**Phase 0 — Foundation & Contracts**
+**Phase 1 — Repository Intelligence** (Phase 0 signed off by human, amit13091992@gmail.com)
 
 ## Current milestone
 
-Phase 0 deliverable per Section 37: package architecture, domain model, TypeScript interfaces,
-analyzer lifecycle, event model, error model, config model, serialization format, plugin model,
-testing architecture, task specs, acceptance criteria.
+Phase 1 deliverable per `docs/tasks/phase-1-repository-discovery.md` is **complete**:
+`RepositoryDiscoverer` implemented in `@code-analyzer/project-model`, verified end-to-end through
+the real `ScanEngine`/`AnalyzerClient` lifecycle. Awaiting human review before starting Phase 2.
 
 ## Completed components
 
@@ -31,10 +31,23 @@ testing architecture, task specs, acceptance criteria.
 - Event model (`ScanEvent` union), error/diagnostic model, structured logging contract.
 - ADRs: see `docs/decisions/`.
 - `.claude/` development-agent configuration: `CLAUDE.md`, agents, skills, commands.
+- `RepositoryDiscoverer` (`@code-analyzer/project-model`, Phase 1): filesystem walk with
+  `.gitignore` handling (`src/walk.ts`), file classification into `SourceClassification`/
+  `LanguageId` (`src/classify.ts`), binary detection (`src/binary.ts`), content hashing
+  (`src/hash.ts`), package-manager + pnpm/npm/yarn workspace detection (`src/package-manager.ts`),
+  and framework detection for Section 5's initial list (`src/frameworks.ts`). Wired together in
+  `src/discover.ts` as `projectModelDiscoverer`, exported from the package's `index.ts`.
+  See ADR-0005.
+- 6 fixture repositories under `fixtures/project-model/` (node-express/npm, nestjs-app/pnpm,
+  nextjs-app/yarn, react-native-app/bun, monorepo-pnpm with 2 workspace packages, generated-code
+  exercising every `SourceClassification`) with 12 passing tests: 7 fixture-classification tests
+  plus a determinism test (`tests/project-model/discover.test.ts`), and 2 true end-to-end tests
+  running real discovery through the actual `AnalyzerClient.scan()` lifecycle with a real
+  `Analyzer` reading `context.project.files` (`tests/project-model/end-to-end.test.ts`).
 
 ## In-progress components
 
-None — Phase 0 core deliverable is complete pending human review.
+None — Phase 1 deliverable is complete pending human review.
 
 ## Blocked components
 
@@ -42,23 +55,28 @@ None.
 
 ## Known architectural decisions
 
-- See `docs/decisions/ADR-0001-monorepo-package-architecture.md` through `ADR-0004`.
+- See `docs/decisions/ADR-0001-monorepo-package-architecture.md` through `ADR-0005`.
 - Notably: the `Analyzer` name collision between the Section 37C rule contract and the Section 3
   facade class is resolved by naming the facade `AnalyzerClient` (ADR-0002).
+- Repository discovery implementation choices (symlinks never followed, classification priority
+  order, minimal workspace-glob support, `FileId` = relative path, no YAML dependency for
+  `pnpm-workspace.yaml`): ADR-0005.
 
 ## Known technical debt
 
-- Stub packages (`project-model`, `parser`, `graph`, `analyzers`, `engines`, `integrations`, `ai`,
-  `plugins`, `cli`) contain only `package.json` + empty `src/index.ts` — intentional per Section 37
-  ("do not move into Phase 1 until Phase 0 architecture is internally coherent").
+- Stub packages (`parser`, `graph`, `analyzers`, `engines`, `integrations`, `ai`, `plugins`, `cli`)
+  still contain only `package.json` + empty `src/index.ts` — intentional, gated on their own phase.
+- Workspace glob expansion only supports an exact path or a trailing `/*` — no `**`/brace patterns
+  (ADR-0005). Revisit against a real fixture that needs it.
 - No persistent cache/incremental-analysis implementation yet (`IncrementalConfig` is a contract
-  only) — planned for Phase 1/Section 29.
+  only) — Section 29 work, not required by the Phase 1 task spec.
 - No SARIF/HTML exporters implemented — `ResultExporter` is a contract only.
 - Reasoning provider abstraction (`ReasoningProviderConfig`) has no concrete provider yet — planned
   for `packages/ai` once deterministic analyzers exist to feed it (Section 24).
+- Discovery does not yet populate `ProjectModel.dependencies` (Section 13's `Dependency[]`) —
+  deliberately deferred per ADR-0005 until vulnerability/reachability data sources exist.
 
 ## Next approved tasks
 
-See `docs/tasks/`. Phase 1 tasks are drafted but **not yet approved to start** — human sign-off on
-Phase 0 is the gate (Section 37: "Do not move into Phase 1 until Phase 0 architecture is internally
-coherent").
+Phase 1 (`docs/tasks/phase-1-repository-discovery.md`) is implemented and tested — pending human
+review/sign-off before Phase 2 (AST & Semantic Source Model) is drafted for approval.

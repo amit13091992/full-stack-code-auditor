@@ -142,6 +142,9 @@ importers:
       '@code-analyzer/core':
         specifier: workspace:*
         version: link:../core
+      ignore:
+        specifier: ^7.0.9
+        version: 7.0.9
     devDependencies:
       '@types/node':
         specifier: ^20.14.0
