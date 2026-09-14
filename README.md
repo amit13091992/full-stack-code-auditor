@@ -15,10 +15,12 @@ primary detection mechanism.
 
 ## Status
 
-**Phase 1 — Repository Intelligence.** Phase 0 (domain model, core contracts, analyzer lifecycle)
-is signed off. Phase 1's `RepositoryDiscoverer` — filesystem discovery, file classification,
-package-manager/workspace detection, framework detection — is implemented and tested end-to-end
-through the real `AnalyzerClient` lifecycle. No concrete analysis rules exist yet (that's Phase 5+).
+**Phase 1 — Repository Intelligence**, plus a working CLI. Phase 0 (domain model, core contracts,
+analyzer lifecycle) is signed off. Phase 1's `RepositoryDiscoverer` — filesystem discovery, file
+classification, package-manager/workspace detection, framework detection — is implemented and
+tested end-to-end through the real `AnalyzerClient` lifecycle. `code-analyzer scan <root>` runs a
+real scan and produces a JSON/SARIF/HTML report today, though `findings` is legitimately empty
+until a real analyzer exists (that's Phase 5+ — see [ADR-0007](docs/decisions/ADR-0007-cli-reporting-exporters.md)).
 See [`docs/project-status.md`](docs/project-status.md) for the authoritative, up-to-date state
 before starting any substantial work.
 
@@ -35,7 +37,7 @@ before starting any substantial work.
 | `@code-analyzer/integrations` | External tool normalization (SARIF, CodeQL, Semgrep, ...) and CI/CD adapters. |
 | `@code-analyzer/ai` | Optional AI investigation/remediation layer. |
 | `@code-analyzer/plugins` | Plugin host/loader runtime. |
-| `@code-analyzer/cli` | Thin CLI adapter around `core` — no analysis logic of its own. |
+| `@code-analyzer/cli` | Thin CLI adapter around `core` (`scan`, `export` commands) plus the JSON/SARIF/HTML `ResultExporter` implementations — no analysis logic of its own. Implemented. |
 
 `packages/core` is the only package every other package depends on; it never depends back on them.
 See [ADR-0001](docs/decisions/ADR-0001-monorepo-package-architecture.md) for why.
@@ -54,6 +56,19 @@ pnpm typecheck
 pnpm test          # vitest run
 pnpm lint
 ```
+
+## Running a scan
+
+```bash
+node packages/cli/dist/bin.js scan <path-to-a-repo> --format json   # or sarif / html
+node packages/cli/dist/bin.js scan <path-to-a-repo> --format html --out report.html
+node packages/cli/dist/bin.js export --format sarif --in report.json --out report.sarif
+```
+
+`scan` runs real Phase 1 repository discovery and produces a schema-versioned `ScanResult`, but
+`findings` will be empty until a real `Analyzer` is registered in `@code-analyzer/analyzers`
+(Phase 5+) — this proves the discovery → report pipeline works end-to-end, not that anything is
+detected yet.
 
 ## Documentation
 
