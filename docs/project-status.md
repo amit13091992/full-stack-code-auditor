@@ -18,6 +18,13 @@ Phase 3 deliverable per `docs/tasks/phase-3-graph-foundation.md` is **complete**
 end-to-end through `AnalyzerClient` with real Phase 1+2 output as input. Awaiting human review
 before starting Phase 4.
 
+**Also added since Phase 3 (ADR-0009, user-requested capability expansion):** Angular/Vue
+framework detection, and **Python as a second supported language** — real Tree-sitter-based
+parsing (functions, classes, imports) producing the same `Module`/`Symbol`/`FunctionEntity`/
+`ClassEntity` shapes as JS/TS, verified end-to-end including the Symbol Graph working over Python
+output with zero `packages/graph` changes. The Module Graph does **not** yet resolve Python
+imports — confirmed empirically, not assumed; see technical debt below.
+
 ## Completed components
 
 - Monorepo scaffold: pnpm workspaces, `tsconfig.base.json`, 10 package boundaries created (`core`,
@@ -92,10 +99,43 @@ before starting Phase 4.
   **Reviewed by architect, graph-engineer, test-engineer, security-engineer, and
   documentation-engineer** — all clean; graph-engineer's one finding (bare `"."`/`".."` specifiers
   misclassified as external) was fixed and pinned with a fixture + test in the same pass.
+- **CommonJS support** (`require()`/`module.exports`/`exports.foo`, added post-Phase-3 in response
+  to a user capability question): `packages/parser/src/parse-file.ts` now recognizes both module
+  systems. No core contract change — reuses existing `ImportKind`/`ExportKind` values. Verified the
+  Module Graph resolves `require()` imports with zero changes to `buildModuleGraph`
+  (`fixtures/graph/module-links/commonjs/`). Reviewed by parser-engineer (clean, 11 stress-test
+  patterns fed through directly, none crashed).
+- **Angular/Vue framework detection + Python as a second language** (ADR-0009, user-requested):
+  `FrameworkId` gains `"angular"`/`"vue"` (`packages/project-model/src/frameworks.ts` detects
+  `@angular/core`/`vue` deps — no parser changes needed, Angular/Vue `.ts`/`.js` already parses as
+  plain TS/JS). `LanguageId` gains `"python"`; `.py`/`.pyi` files are classified and pytest's
+  `test_*.py`/`*_test.py` convention is recognized (`packages/project-model/src/classify.ts`) —
+  fixing this also **fixed a real pre-existing bug**: `requirements.txt` was being classified
+  `documentation` (generic `.txt` rule) instead of `config`, because the config-filename check ran
+  *after* the extension-based documentation check; reordered so an exact filename match wins.
+  `pip`/`poetry` package-manager detection added (`requirements.txt`/`pyproject.toml`). Python
+  parsing uses **Tree-sitter** (`tree-sitter` + `tree-sitter-python`, ADR-0006's documented
+  fallback for a non-compiler-API language) — `packages/parser/src/python/parse-python-file.ts`
+  mirrors the JS/TS parser's scope (top-level functions/classes/imports, deterministic IDs,
+  syntax-error tolerance via `hasError`). `parserProjectIndexer` now dispatches by `file.language`.
+  Verified end-to-end: real discovery → real Python parsing → real Symbol Graph (`DECLARES` edges
+  work over Python output with zero `packages/graph` changes) → a real `Analyzer`
+  (`fixtures/project-model/python-flask/`, `tests/graph/python-end-to-end.test.ts`). **The Module
+  Graph does not resolve Python imports** — confirmed empirically (0 edges over a Python fixture
+  with real imports), not assumed; Python's dotted-module specifiers need their own resolution
+  algorithm, documented as a Non-goal in ADR-0009, not silently broken.
+  **Reviewed by architect, parser-engineer, security-engineer, and test-engineer** — all clean.
+  parser-engineer's one real finding (Tree-sitter's `node.startIndex` is a UTF-16 code-unit offset,
+  not a UTF-8 byte offset, when fed a JS string) is now documented with an explicit comment in
+  `packages/parser/src/python/location.ts` and pinned with a non-ASCII regression test
+  (`fixtures/parser/python-constructs/non-ascii.py`). test-engineer added missing coverage for
+  Angular/Vue detection and the three other newly-added `CONFIG_FILENAMES` entries
+  (`pyproject.toml`/`setup.cfg`/`pipfile`), none of which had any test before this review round.
 
 ## In-progress components
 
-None — Phase 1, the CLI & Reporting task, Phase 2, and Phase 3 are all complete, pending human review.
+None — Phase 1, the CLI & Reporting task, Phase 2, Phase 3, CommonJS support, and Angular/Vue/
+Python support are all complete, pending human review.
 
 ## Blocked components
 
@@ -103,7 +143,8 @@ None.
 
 ## Known architectural decisions
 
-- See `docs/decisions/ADR-0001-monorepo-package-architecture.md` through `ADR-0007`.
+- See `docs/decisions/ADR-0001-monorepo-package-architecture.md` through `ADR-0009` (`ADR-0008` is
+  reserved, not yet written — the `ProjectIndexer` diagnostics-channel gap below).
 - Notably: the `Analyzer` name collision between the Section 37C rule contract and the Section 3
   facade class is resolved by naming the facade `AnalyzerClient` (ADR-0002).
 - Repository discovery implementation choices (symlinks never followed, classification priority
@@ -121,6 +162,11 @@ None.
   change any frozen contract): `@code-analyzer/graph` depends on `@code-analyzer/parser` directly
   (not just `core`) so its composing `ProjectIndexer` can run real parsing before building graphs
   over the result — a non-cyclic, ADR-0001-compatible edge (`parser` does not depend on `graph`).
+- `LanguageId` gains `"python"`, `FrameworkId` gains `"angular"`/`"vue"`, Python parsing uses
+  Tree-sitter (ADR-0006's documented fallback), Python's `ImportKind` mapping (`import`/
+  `import ... as` → `"namespace"`, `from ... import` → `"named"`, wildcard → `"namespace"` with
+  `localName: "*"`), and `Symbol.exported` for Python being convention-derived (leading
+  underscore) rather than keyword-derived: ADR-0009.
 
 ## Known technical debt
 
@@ -200,12 +246,45 @@ None.
   add an explicit node/edge/queue-size cap (or a documented max on `nodeCount`/`edgeCount`) before
   any Phase 4+ analyzer actually calls `findPaths` — the right bound is that analyzer's call to
   make, not something to guess at speculatively now (Section 4/35.7).
+- **Python Module Graph resolution doesn't exist** — `buildModuleGraph` produces zero `IMPORTS`
+  edges over Python `import`/`from ... import ...` statements (confirmed empirically). Python's
+  dotted-module specifiers, `__init__.py` package roots, and `sys.path`-based absolute-import
+  resolution are a different algorithm from the JS-specific relative-path resolver; extending it is
+  real, separate follow-up work (ADR-0009 Non-goals), not a bug in the current implementation.
+- **`.vue` single-file components aren't parsed** — `.vue` files are tagged `language: "unknown"`,
+  same as before Angular/Vue detection was added; only Angular/Vue framework *detection* landed,
+  not `.vue` SFC `<script>`-block extraction (ADR-0009 Non-goals).
+- **No Django/Flask/FastAPI (or any Python) framework detection** — `FrameworkId` has no
+  Python-framework values yet; would need parsing `requirements.txt`/`pyproject.toml` dependency
+  lists the way `frameworks.ts` already parses `package.json` (ADR-0009 Non-goals).
+- **Python: no generator detection, no nested-class/nested-function tracking, no class-body
+  property tracking** (Python's assignment-based instance/class attributes have no direct
+  `ClassProperty` equivalent extracted yet) — all documented Non-goals in ADR-0009, matching the
+  "top-level only" scope discipline Phase 2 already established for JS/TS.
+- **Only one non-JS/TS language (Python) is supported** — C#, PHP, Java, Go, Ruby, Rust, etc. have
+  no `LanguageId` value and no parser; each would need its own ADR-0009-style addition (a
+  `LanguageId` value + a Tree-sitter grammar + a parser module), not a generalized "any language"
+  capability. See ADR-0009's Alternatives-considered note on why a generic multi-language
+  abstraction wasn't built preemptively with only one Tree-sitter language in the codebase.
+- **No per-file parse-time budget/timeout** (either JS/TS or Python) — security review flagged this
+  as a pre-existing, language-agnostic gap (not new, not made worse by adding Python): the file-size
+  cap (`MAX_PARSEABLE_FILE_SIZE_BYTES`) bounds worst-case input size but there's no hard timeout on
+  parse duration itself. Track alongside other Phase 3+ hardening items.
+- **No native-dependency supply-chain policy documented** in `docs/security/overview.md` —
+  `tree-sitter`/`tree-sitter-python` are the first native (compiled) dependencies in this monorepo;
+  ADR-0009 notes they were verified to install/run cleanly here, but there's no stated position on
+  prebuilt-binary provenance/checksum trust. Worth formalizing once a second native dependency
+  exists (security review's own recommendation — don't build the policy doc prematurely for one
+  data point, same anti-speculation reasoning as ADR-0009's Alternatives section).
+
+## Next approved tasks
 
 Phase 1 (`docs/tasks/phase-1-repository-discovery.md`), the CLI & Reporting task
 (`docs/tasks/cli-and-reporting.md`, ADR-0007), Phase 2
-(`docs/tasks/phase-2-ast-semantic-model.md`, ADR-0006), and Phase 3
-(`docs/tasks/phase-3-graph-foundation.md`) are all **implemented and tested** — all pending human
-review before: Phase 4 (Call Graph) is drafted for approval, the CLI is wired into any CI/CD
-adapter or published to npm, and the `ProjectIndexer` diagnostics-channel gap (ADR-0008, flagged
-during Phase 2 review) is decided on — ideally before Phase 4 adds a third real `ProjectIndexer`-
-composing package.
+(`docs/tasks/phase-2-ast-semantic-model.md`, ADR-0006), Phase 3
+(`docs/tasks/phase-3-graph-foundation.md`), CommonJS support, and Angular/Vue/Python support
+(ADR-0009) are all **implemented and tested** — all pending human review before: Phase 4 (Call
+Graph) is drafted for approval, the CLI is wired into any CI/CD adapter or published to npm, the
+`ProjectIndexer` diagnostics-channel gap (ADR-0008, flagged during Phase 2 review) is decided on,
+and — if desired — Python Module Graph resolution or a third language are scoped as their own
+follow-up tasks.

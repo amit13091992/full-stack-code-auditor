@@ -25,17 +25,29 @@ export async function readPackageJson(dir: string): Promise<PackageJson | undefi
   }
 }
 
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function detectPackageManager(root: string): Promise<PackageManagerKind> {
   for (const [lockfile, kind] of LOCKFILE_MANAGER) {
-    try {
-      await fs.access(path.join(root, lockfile));
-      return kind;
-    } catch {
-      // try the next lockfile
-    }
+    if (await fileExists(path.join(root, lockfile))) return kind;
   }
   const rootPackageJson = await readPackageJson(root);
-  return rootPackageJson ? "npm" : "unknown";
+  if (rootPackageJson) return "npm";
+
+  // Python ecosystem (ADR-0009): pyproject.toml implies Poetry (or another PEP 517 build backend
+  // — "poetry" is used here as the closest existing PackageManagerKind, not a claim every
+  // pyproject.toml project specifically uses Poetry); requirements.txt implies plain pip.
+  if (await fileExists(path.join(root, "pyproject.toml"))) return "poetry";
+  if (await fileExists(path.join(root, "requirements.txt"))) return "pip";
+
+  return "unknown";
 }
 
 /** Minimal `packages:` list extractor for a pnpm-workspace.yaml — Phase 1 doesn't need a full YAML parser. */
@@ -101,15 +113,19 @@ export async function detectWorkspacePackages(root: string, packageManager: Pack
   const globs = pnpmGlobs ?? npmGlobs;
 
   if (!globs) {
-    if (!rootPackageJson) return [];
-    return [
-      {
-        name: rootPackageJson.name ?? path.basename(root),
-        path: ".",
-        manifestPath: "package.json",
-        packageManager,
-      },
-    ];
+    if (rootPackageJson) {
+      return [{ name: rootPackageJson.name ?? path.basename(root), path: ".", manifestPath: "package.json", packageManager }];
+    }
+    // Python ecosystem (ADR-0009): no multi-package workspace concept detected yet (that would
+    // need parsing pyproject.toml's [tool.poetry] / a monorepo tool's config) — just report the
+    // single package the manifest file implies, same fallback shape as the single-package.json case.
+    if (packageManager === "poetry" && (await fileExists(path.join(root, "pyproject.toml")))) {
+      return [{ name: path.basename(root), path: ".", manifestPath: "pyproject.toml", packageManager }];
+    }
+    if (packageManager === "pip" && (await fileExists(path.join(root, "requirements.txt")))) {
+      return [{ name: path.basename(root), path: ".", manifestPath: "requirements.txt", packageManager }];
+    }
+    return [];
   }
 
   const relativeDirs = (await Promise.all(globs.map((glob) => expandWorkspaceGlob(root, glob)))).flat();

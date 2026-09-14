@@ -1,7 +1,7 @@
 {
   "name": "@code-analyzer/parser",
   "version": "0.0.0",
-  "description": "Phase 2: AST/semantic source model (TypeScript Compiler API for JS/TS, per ADR-0006; Tree-sitter reserved for future non-JS/TS languages), symbol resolution, incremental parsing.",
+  "description": "AST/semantic source model: TypeScript Compiler API for JS/TS (ADR-0006), Tree-sitter for Python (ADR-0009).",
   "license": "UNLICENSED",
   "type": "module",
   "main": "./dist/index.js",
@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@code-analyzer/core": "workspace:*",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "tree-sitter": "^0.25.1",
+    "tree-sitter-python": "^0.25.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.0"

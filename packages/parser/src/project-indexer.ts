@@ -1,9 +1,29 @@
 import { promises as fs } from "node:fs";
-import type { ClassEntity, FunctionEntity, GraphAccess, Logger, Module, ProjectIndexer, ProjectModel, Symbol as SymbolEntity } from "@code-analyzer/core";
+import type { ClassEntity, Diagnostic, FunctionEntity, GraphAccess, LanguageId, Logger, Module, ProjectIndexer, ProjectModel, Symbol as SymbolEntity } from "@code-analyzer/core";
 import { parseFile } from "./parse-file.js";
+import { parsePythonFile } from "./python/parse-python-file.js";
 
-const PARSEABLE_LANGUAGES = new Set(["javascript", "typescript"]);
+/**
+ * Which parser handles which language (ADR-0006 for JS/TS, ADR-0009 for Python). Adding a new
+ * language means adding a branch here and its own parser module — this dispatch is the seam future
+ * languages extend, not a re-architecture.
+ */
+const PARSEABLE_LANGUAGES = new Set<LanguageId>(["javascript", "typescript", "python"]);
 const SKIPPED_CLASSIFICATIONS = new Set(["generated", "vendored", "asset"]);
+
+interface ParsedFileResult {
+  readonly module: Module;
+  readonly symbols: readonly SymbolEntity[];
+  readonly functions: readonly FunctionEntity[];
+  readonly classes: readonly ClassEntity[];
+  readonly diagnostics: readonly Diagnostic[];
+}
+
+function parseByLanguage(language: LanguageId, params: { fileId: Module["fileId"]; path: string; content: string }): ParsedFileResult | undefined {
+  if (language === "javascript" || language === "typescript") return parseFile(params);
+  if (language === "python") return parsePythonFile(params);
+  return undefined;
+}
 
 /**
  * Files larger than this are skipped rather than parsed (Section 31: repository content is
@@ -16,9 +36,11 @@ const SKIPPED_CLASSIFICATIONS = new Set(["generated", "vendored", "asset"]);
 const MAX_PARSEABLE_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
 /**
- * The Phase 2 `ProjectIndexer` (docs/tasks/phase-2-ast-semantic-model.md): parses every eligible
- * file from Phase 1 discovery and populates `modules`/`symbols`/`functions`/`classes` on the
- * `ProjectModel`. `graphs` stays `{}` — module/symbol/call/taint graphs are Phase 3-5, not this.
+ * The `ProjectIndexer` for source parsing (docs/tasks/phase-2-ast-semantic-model.md,
+ * ADR-0009): parses every eligible file from Phase 1 discovery — JavaScript/TypeScript via the
+ * TypeScript Compiler API, Python via Tree-sitter — and populates `modules`/`symbols`/
+ * `functions`/`classes` on the `ProjectModel`. `graphs` stays `{}` — module/symbol/call/taint
+ * graphs are Phase 3-5, not this.
  *
  * Known contract gap (flagged for architect review, not fixed here): `ProjectIndexer.index()`
  * (packages/core/src/analyzer/pipeline.ts) has no return channel for `Diagnostic`s, so per-file
@@ -56,7 +78,8 @@ export const parserProjectIndexer: ProjectIndexer = {
       }
 
       const content = await fs.readFile(file.absolutePath, "utf-8");
-      const result = parseFile({ fileId: file.id, path: file.path, content });
+      const result = parseByLanguage(file.language, { fileId: file.id, path: file.path, content });
+      if (!result) continue;
 
       modules.push(result.module);
       symbols.push(...result.symbols);

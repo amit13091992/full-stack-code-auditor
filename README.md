@@ -27,7 +27,11 @@ Concretely, today:
 - **Discovery** (Phase 1) — walks a repo, classifies every file, detects the package manager,
   workspace layout, and frameworks (React, Express, NestJS, Next.js, ...).
 - **Parsing** (Phase 2) — parses every JS/TS file into functions, classes, imports, and exports
-  using the real TypeScript compiler, not regex.
+  using the real TypeScript compiler, not regex. Understands both ES modules and CommonJS
+  (`require()`/`module.exports`), so genuinely legacy Node.js code works too.
+- **Python** — a second language, parsed with Tree-sitter (functions, classes, imports). Same
+  Symbol Graph support as JS/TS; cross-file import linking for Python isn't built yet (see
+  `docs/project-status.md`).
 - **Graphs** (Phase 3, this round) — links files together by their imports, and links classes to
   what they extend/implement, into a real queryable graph.
 - **Reporting** — `code-analyzer scan <repo>` runs real discovery and produces a JSON, SARIF, or
@@ -47,7 +51,7 @@ reviewed, and what's next.
 |---|---|
 | `@code-analyzer/core` | Domain model, contracts, and the `ScanEngine` lifecycle. Zero dependencies on other workspace packages, no analysis logic. |
 | `@code-analyzer/project-model` | Repository discovery -> normalized `ProjectModel` (Phase 1, implemented). |
-| `@code-analyzer/parser` | AST / semantic source model — TypeScript Compiler API parsing (Phase 2, implemented, ADR-0006). |
+| `@code-analyzer/parser` | AST / semantic source model — TypeScript Compiler API for JS/TS incl. CommonJS (ADR-0006), Tree-sitter for Python (ADR-0009). Implemented. |
 | `@code-analyzer/graph` | Module Graph + Symbol Graph (Phase 3, implemented); call graph and taint graph land in Phase 4/5. |
 | `@code-analyzer/analyzers` | Individual analysis rules (security, architecture, quality, performance, dependency, secrets, infrastructure) — not started yet. |
 | `@code-analyzer/engines` | Engine-level composition, finding correlation, risk scoring — not started yet. |
@@ -61,10 +65,15 @@ reviewed, and what's next.
 analysis engine instead of drifting apart. See [ADR-0001](docs/decisions/ADR-0001-monorepo-package-architecture.md)
 for the reasoning.
 
-## Supported languages / frameworks (initial)
+## Supported languages / frameworks
 
-JavaScript, TypeScript, JSON, YAML, SQL, Dockerfile. Frameworks: React, React Native, Node.js,
-Express, NestJS, Next.js.
+**Fully parsed** (real Symbol Graph support): JavaScript, TypeScript (incl. CommonJS). **Fully
+parsed, single-file only** (no cross-file import linking yet): Python. **Recognized but not
+parsed** (file-tagging only): JSON, YAML, SQL, Dockerfile. **Not recognized at all**: everything
+else (C#, PHP, Java, Go, Ruby, Rust, ...) — see [ADR-0009](docs/decisions/ADR-0009-angular-vue-python-support.md)
+for what adding a language actually takes.
+
+Frameworks detected: React, React Native, Angular, Vue, Node.js, Express, NestJS, Next.js.
 
 ## Getting started
 

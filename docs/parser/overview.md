@@ -34,6 +34,22 @@ with no compiler-API equivalent.
 `buildModuleGraph` (`packages/graph`), since it only ever reads `ImportBinding.specifier`,
 regardless of which module system produced it. Genuinely legacy, pre-ESM Node.js code is covered.
 
+## Python: implemented (ADR-0009)
+
+A second language, `LanguageId: "python"`, parsed via **Tree-sitter** (`tree-sitter` +
+`tree-sitter-python`) — this is exactly the fallback ADR-0006 reserved for a language with no
+TypeScript-Compiler-API equivalent. `packages/parser/src/python/parse-python-file.ts` mirrors
+`parse-file.ts`'s scope as closely as Python's grammar allows: top-level `def`/`class` only,
+per-file only, same deterministic-ID discipline, same "never throws on a syntax error" tolerance
+(a `hasError` tree becomes a `Diagnostic`). `parserProjectIndexer` dispatches by `file.language`.
+
+**Important asymmetry with JS/TS, verified not assumed**: the Symbol Graph (`DECLARES`/`EXTENDS`/
+`IMPLEMENTS`) works over Python output with zero `packages/graph` changes — it's entity-shape-based,
+not language-based. The **Module Graph does not** — `buildModuleGraph`'s specifier resolution is
+JS-relative-path-specific and produces zero edges for Python's dotted-module `import` statements.
+Extending it for Python needs its own resolution algorithm; see `docs/project-status.md`'s
+technical debt.
+
 ## Still undecided (out of Phase 2's scope, not forgotten)
 
 - Incremental re-parse strategy (Section 2: "incremental parsing where possible") and how it

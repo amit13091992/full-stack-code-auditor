@@ -20,13 +20,15 @@ tests/                    unit + integration tests, mirrors packages/*/src struc
     export-command.test.ts `export` command success/failure paths
   parser/
     parse-file.test.ts     per-file parse unit tests (Phase 2): symbols/functions/classes/
-                            imports/exports, determinism, malformed-file tolerance
+                            imports/exports (incl. CommonJS), determinism, malformed-file tolerance
+    parse-python-file.test.ts  Python (Tree-sitter) per-file parse unit tests (ADR-0009)
     project-indexer.test.ts  file-size DoS-mitigation regression test (Phase 2, security-review follow-up)
     end-to-end.test.ts     real discovery -> real parsing through AnalyzerClient (Phase 2)
   graph/
     in-memory-graph.test.ts  Graph primitive unit tests (Phase 3): add/lookup, findPaths, cycles
     builders.test.ts       Module Graph / Symbol Graph builder tests against real parsed fixtures
     end-to-end.test.ts     real discovery -> parsing -> graph-building through AnalyzerClient (Phase 3)
+    python-end-to-end.test.ts  real Python discovery -> Tree-sitter parsing -> Symbol Graph (ADR-0009)
 fixtures/                 input repositories + expected-output fixtures (Section 30)
   project-model/          Phase 1 repository-discovery fixtures (see below)
   parser/                 Phase 2 parser fixtures (see below)
@@ -64,7 +66,16 @@ arrow function), `shapes.ts` (interface, type alias, enum, decorated/inherited c
 `implements` clauses, static members, getter/setter accessors, a non-exported class),
 `imports-exports.ts` (every import/export kind), `plain.js` (the `allowJs` path), `malformed.ts`
 (intentional syntax error for `ParseError` tolerance), `component.tsx` (JSX/TSX `ScriptKind` path),
-`data.json` (a non-JS/TS file exercising `parserProjectIndexer`'s language-skip branch).
+`data.json` (a non-JS/TS file exercising `parserProjectIndexer`'s language-skip branch),
+`commonjs.js` (`require()`/`module.exports`/`exports.foo`, ADR-0006 addendum).
+
+`fixtures/parser/python-constructs/` (ADR-0009) is populated: `functions.py` (top-level function,
+async function, leading-underscore exposure convention, top-level variables), `shapes.py`
+(classes with methods, `__init__` as constructor, a decorator, same-file multiple-inheritance
+resolution), `imports.py` (every Python import form: plain, aliased, `from`, `from`-aliased,
+relative, wildcard), `malformed.py` (intentional syntax error for `hasError`-based tolerance).
+`fixtures/project-model/python-flask/` (`requirements.txt`, `app.py`, `test_app.py`) is a small
+real "repo" for the pip-detection and end-to-end tests.
 
 `fixtures/graph/module-links/` (Phase 3) is populated: `main.ts` (imports `./math.js` extensionless-
 `.ts`-via-`.js`-specifier, `./utils` as a directory/`index.ts` import, the bare specifier

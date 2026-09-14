@@ -14,6 +14,7 @@ export type SourceClassification =
 export type LanguageId =
   | "javascript"
   | "typescript"
+  | "python"
   | "json"
   | "yaml"
   | "sql"

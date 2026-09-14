@@ -1,7 +1,7 @@
 import type { FrameworkId } from "@code-analyzer/core";
 import type { PackageJson } from "./package-manager.js";
 
-const FRAMEWORK_ORDER: readonly FrameworkId[] = ["node", "express", "nestjs", "nextjs", "react", "react-native"];
+const FRAMEWORK_ORDER: readonly FrameworkId[] = ["node", "express", "nestjs", "nextjs", "react", "react-native", "angular", "vue"];
 
 /**
  * Detects Section 5's initial framework list from merged dependency names across the root and
@@ -24,6 +24,8 @@ export function detectFrameworks(packageJsons: readonly PackageJson[]): readonly
   if (dependencyNames.has("express")) detected.add("express");
   if (dependencyNames.has("next")) detected.add("nextjs");
   if (dependencyNames.has("@nestjs/core")) detected.add("nestjs");
+  if (dependencyNames.has("@angular/core")) detected.add("angular");
+  if (dependencyNames.has("vue")) detected.add("vue");
 
   return FRAMEWORK_ORDER.filter((framework) => detected.has(framework));
 }

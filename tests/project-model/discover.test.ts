@@ -183,3 +183,81 @@ describe("projectModelDiscoverer / generated-code fixture", () => {
     expect(second.files.map((f) => f.contentHash)).toEqual(first.files.map((f) => f.contentHash));
   });
 });
+
+describe("projectModelDiscoverer / angular-app fixture", () => {
+  const root = path.join(FIXTURES_ROOT, "angular-app");
+
+  it("detects the angular framework from an @angular/core dependency", async () => {
+    const project = await projectModelDiscoverer.discover(root, configFor(root), noopLogger);
+
+    expect(project.frameworks).toContain("angular");
+    expect(project.frameworks).toContain("node");
+    expect(project.frameworks).not.toContain("vue");
+    expect(project.frameworks).not.toContain("react");
+
+    const component = findFile(project.files, "src/app.component.ts");
+    expect(component.language).toBe("typescript");
+    expect(component.classification).toBe("source");
+  });
+});
+
+describe("projectModelDiscoverer / vue-app fixture", () => {
+  const root = path.join(FIXTURES_ROOT, "vue-app");
+
+  it("detects the vue framework from a vue dependency", async () => {
+    const project = await projectModelDiscoverer.discover(root, configFor(root), noopLogger);
+
+    expect(project.frameworks).toContain("vue");
+    expect(project.frameworks).toContain("node");
+    expect(project.frameworks).not.toContain("angular");
+    expect(project.frameworks).not.toContain("react");
+
+    const main = findFile(project.files, "src/main.ts");
+    expect(main.language).toBe("typescript");
+    expect(main.classification).toBe("source");
+  });
+});
+
+describe("projectModelDiscoverer / python-flask fixture (ADR-0009)", () => {
+  const root = path.join(FIXTURES_ROOT, "python-flask");
+
+  it("classifies .py files as python source/test and detects pip from requirements.txt", async () => {
+    const project = await projectModelDiscoverer.discover(root, configFor(root), noopLogger);
+
+    const app = findFile(project.files, "app.py");
+    expect(app.language).toBe("python");
+    expect(app.classification).toBe("source");
+
+    const test = findFile(project.files, "test_app.py");
+    expect(test.classification).toBe("test"); // pytest's own test_*.py convention
+
+    const requirements = findFile(project.files, "requirements.txt");
+    expect(requirements.classification).toBe("config");
+
+    expect(project.repository.packages[0]?.packageManager).toBe("pip");
+    expect(project.repository.packages).toHaveLength(1);
+  });
+});
+
+describe("projectModelDiscoverer / python-config-files fixture (regression: requirements.txt config-vs-documentation)", () => {
+  // Regression test for classify.ts's CONFIG_FILENAMES check being moved before the
+  // documentation-extension check (requirements.txt was previously misclassified as
+  // documentation because ".txt" is a DOCUMENTATION_EXTENSIONS entry). Covers every
+  // Python-ecosystem filename added to CONFIG_FILENAMES alongside that fix, not just
+  // requirements.txt (already covered by the python-flask fixture above).
+  const root = path.join(FIXTURES_ROOT, "python-config-files");
+
+  it("classifies pyproject.toml, setup.cfg, and pipfile as config, not documentation/unknown", async () => {
+    const project = await projectModelDiscoverer.discover(root, configFor(root), noopLogger);
+
+    expect(findFile(project.files, "pyproject.toml").classification).toBe("config");
+    expect(findFile(project.files, "setup.cfg").classification).toBe("config");
+    expect(findFile(project.files, "pipfile").classification).toBe("config");
+
+    const app = findFile(project.files, "app.py");
+    expect(app.language).toBe("python");
+    expect(app.classification).toBe("source");
+
+    expect(project.repository.packages[0]?.packageManager).toBe("poetry");
+  });
+});

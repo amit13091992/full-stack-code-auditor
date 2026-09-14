@@ -14,6 +14,8 @@ const LANGUAGE_BY_EXTENSION: Readonly<Record<string, LanguageId>> = {
   ".yml": "yaml",
   ".yaml": "yaml",
   ".sql": "sql",
+  ".py": "python",
+  ".pyi": "python",
 };
 
 const DOCUMENTATION_EXTENSIONS = new Set([".md", ".mdx", ".txt"]);
@@ -33,6 +35,8 @@ const ASSET_EXTENSIONS = new Set([
 
 const TEST_PATH_SEGMENTS = new Set(["test", "tests", "__tests__", "__mocks__"]);
 const TEST_NAME_PATTERN = /\.(test|spec)\.[cm]?[jt]sx?$/i;
+// Python's own conventions: pytest/unittest discover test_*.py and *_test.py by default.
+const PYTHON_TEST_NAME_PATTERN = /^(test_.+|.+_test)\.pyi?$/i;
 
 const GENERATED_PATH_SEGMENTS = new Set(["dist", "build", ".next", "coverage", "generated", "out"]);
 const GENERATED_NAME_PATTERN = /\.(generated|gen)\.[cm]?[jt]sx?$/i;
@@ -56,6 +60,10 @@ const CONFIG_FILENAMES = new Set([
   "babel.config.js",
   "metro.config.js",
   ".env.example",
+  "pyproject.toml",
+  "requirements.txt",
+  "setup.cfg",
+  "pipfile",
 ]);
 const CONFIG_NAME_PATTERN = /^(tsconfig|jest\.config|vitest\.config|.*\.config)\.[cm]?[jt]sx?$/i;
 
@@ -89,8 +97,18 @@ export function classifySource(relativePath: string): SourceClassification {
   if (segments.some((segment) => INFRASTRUCTURE_PATH_SEGMENTS.has(segment.toLowerCase())) || INFRASTRUCTURE_FILENAMES.has(base)) {
     return "infrastructure";
   }
-  if (segments.some((segment) => TEST_PATH_SEGMENTS.has(segment.toLowerCase())) || TEST_NAME_PATTERN.test(base)) {
+  if (
+    segments.some((segment) => TEST_PATH_SEGMENTS.has(segment.toLowerCase())) ||
+    TEST_NAME_PATTERN.test(base) ||
+    PYTHON_TEST_NAME_PATTERN.test(base)
+  ) {
     return "test";
+  }
+  // An exact config-filename match (e.g. "requirements.txt") wins over a generic
+  // extension-based documentation guess (".txt" -> documentation) — a specific, known filename
+  // is stronger evidence than its extension alone.
+  if (CONFIG_FILENAMES.has(base)) {
+    return "config";
   }
   if (DOCUMENTATION_EXTENSIONS.has(ext) || base === "license" || base.startsWith("license.")) {
     return "documentation";
@@ -103,7 +121,7 @@ export function classifySource(relativePath: string): SourceClassification {
   }
 
   const language = classifyLanguage(relativePath);
-  if (language === "javascript" || language === "typescript" || language === "sql") return "source";
+  if (language === "javascript" || language === "typescript" || language === "python" || language === "sql") return "source";
   if (language === "dockerfile") return "infrastructure";
   return "unknown";
 }

@@ -14,6 +14,8 @@ import type { Symbol as SymbolEntity } from "./symbol.js";
 export type FrameworkId =
   | "react"
   | "react-native"
+  | "angular"
+  | "vue"
   | "node"
   | "express"
   | "nestjs"
