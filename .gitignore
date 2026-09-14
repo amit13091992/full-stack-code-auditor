@@ -1,12 +1,35 @@
+# dependencies
 node_modules/
+.pnpm-store/
+
+# build output (every packages/*/dist)
 dist/
 build/
 *.tsbuildinfo
 .turbo/
+
+# test / coverage
 coverage/
-.DS_Store
+.vitest-cache/
+
+# lint / tooling caches
+.eslintcache
+
+# logs
 *.log
+pnpm-debug.log*
+npm-debug.log*
+
+# env / secrets — never commit real values (see CLAUDE.md Security requirements)
 .env
 .env.*
 !.env.example
 .cache/
+
+# editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Claude Code local, machine-specific overrides (not the shared .claude/settings.json)
+.claude/settings.local.json
