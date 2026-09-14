@@ -125,6 +125,22 @@ describe("projectModelDiscoverer / monorepo-pnpm fixture", () => {
   });
 });
 
+describe("projectModelDiscoverer / monorepo-pnpm-gaps fixture (regression)", () => {
+  const root = path.join(FIXTURES_ROOT, "monorepo-pnpm-gaps");
+
+  it("resolves every glob in pnpm-workspace.yaml's packages: list even across a comment and a blank line", async () => {
+    // Regression test: readPnpmWorkspaceGlobs used to `break` on the first non-list-item line,
+    // silently dropping every glob after a blank line or a `# comment` inside the `packages:`
+    // list. This fixture's pnpm-workspace.yaml has exactly that shape (packages/* — comment —
+    // blank line — apps/*) and must still resolve all 3 workspace packages.
+    const project = await projectModelDiscoverer.discover(root, configFor(root), noopLogger);
+
+    expect(project.repository.packages).toHaveLength(3);
+    const names = project.repository.packages.map((p) => p.name).sort();
+    expect(names).toEqual(["@fixture-gaps/api", "@fixture-gaps/cli", "@fixture-gaps/web"]);
+  });
+});
+
 describe("projectModelDiscoverer / generated-code fixture", () => {
   const root = path.join(FIXTURES_ROOT, "generated-code");
 
@@ -147,6 +163,16 @@ describe("projectModelDiscoverer / generated-code fixture", () => {
 
     expect(findFile(project.files, "README.md").classification).toBe("documentation");
     expect(project.repository.packages[0]?.packageManager).toBe("npm");
+
+    const vendored = findFile(project.files, "vendor/lib.js");
+    expect(vendored.classification).toBe("vendored");
+
+    const asset = findFile(project.files, "src/logo.svg");
+    expect(asset.classification).toBe("asset");
+
+    const unrecognized = findFile(project.files, "scripts/deploy.rb");
+    expect(unrecognized.language).toBe("unknown");
+    expect(unrecognized.classification).toBe("unknown");
   });
 
   it("produces a deterministic file list and content hashes across repeated discovery runs", async () => {

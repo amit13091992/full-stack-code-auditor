@@ -1,7 +1,9 @@
 /**
- * @code-analyzer/parser — Phase 2 (AST & Semantic Source Model).
- *
- * Not implemented in Phase 0 (Section 3/37: contracts and package boundaries first). This
- * package's implementation begins once its phase's task spec under docs/tasks/ is approved.
+ * @code-analyzer/parser — Phase 2 (AST & Semantic Source Model). TypeScript Compiler API,
+ * per-file parsing, deterministic IDs (ADR-0006). See docs/tasks/phase-2-ast-semantic-model.md.
  */
-export {};
+export { parseFile } from "./parse-file.js";
+export type { ParseFileResult } from "./parse-file.js";
+export { parserProjectIndexer } from "./project-indexer.js";
+export { toModuleId, toSymbolId, toFunctionId, toClassId } from "./ids.js";
+export { toLocation, toRange } from "./location.js";

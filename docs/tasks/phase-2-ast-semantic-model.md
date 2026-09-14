@@ -1,9 +1,10 @@
-# Task: Phase 2 — AST & Semantic Source Model (DRAFT — not approved to start)
+# Task: Phase 2 — AST & Semantic Source Model (IMPLEMENTED — pending human review)
 
-> Per `docs/project-status.md`: Phase 1 is implemented and tested but still awaiting human review.
-> This draft exists so Phase 2 scope is visible during that review, not as a green light — the
-> same gate Phase 1 went through (Section 37: "Do not move into Phase 1 until Phase 0 architecture
-> is internally coherent") applies here for Phase 2 against Phase 1.
+> Approved by amit13091992@gmail.com. ADR-0006 (parser choice/ID scheme/per-file scope) accepted;
+> implementation complete and tested. Wiring `packages/cli`'s `scan` command to use the real
+> `parserProjectIndexer` instead of its current passthrough stub was intentionally left out of this
+> task's scope (that's `docs/tasks/cli-and-reporting.md`'s concern) — flagged as a natural follow-up
+> in `docs/project-status.md`.
 
 ## Objective
 
@@ -99,29 +100,34 @@ change in through the parser package.
 
 ## Tests
 
-New fixtures under `fixtures/parser/` (not `fixtures/project-model/` — this is Phase 2's own
-concern): small hand-written `.ts`/`.tsx`/`.js`/`.jsx` files covering — a plain function
-declaration, an arrow function assigned to a `const`, a class with a constructor/method/property/
-decorator, an interface, a type alias, an enum, named/default/namespace/dynamic/re-export imports
-and exports, and one intentionally-malformed file to exercise `ParseError` tolerance. Assert the
-exact `Symbol`/`FunctionEntity`/`ClassEntity`/`ImportBinding`/`ExportBinding` shape produced,
-including source locations. Add an end-to-end test (Phase 1's `end-to-end.test.ts` pattern) running
-the real `ProjectIndexer` after real discovery through `AnalyzerClient`, with a real `Analyzer`
-asserting on `context.project.modules`/`.symbols`/`.functions`/`.classes`.
+`fixtures/parser/basic-constructs/`: `functions.ts` (function declaration + arrow-function `const`
++ an unexported async function), `shapes.ts` (interface, type alias, enum, an abstract base class
+with a decorator/readonly/protected property/constructor/method, and a subclass extending +
+implementing same-file symbols), `imports-exports.ts` (default/namespace/named/side-effect/dynamic
+imports, named/default/re-export exports), `plain.js` (the `allowJs` path, no type annotations),
+`malformed.ts` (intentional syntax error). `tests/parser/parse-file.test.ts` (8 tests) asserts exact
+`Symbol`/`FunctionEntity`/`ClassEntity`/`ImportBinding`/`ExportBinding` shapes including source
+locations, plus a determinism test. `tests/parser/end-to-end.test.ts` (2 tests) runs the real
+`parserProjectIndexer` after real Phase 1 discovery through `AnalyzerClient`, with a real `Analyzer`
+(`quality/exported-function-count`) reading `context.project.functions`.
 
 ## Acceptance criteria
 
-- [ ] ADR-0006 written and accepted: TypeScript Compiler API choice, deterministic ID scheme,
+- [x] ADR-0006 written and accepted: TypeScript Compiler API choice, deterministic ID scheme,
       per-file (not cross-file) scope for this phase.
-- [ ] Parser implemented and exported from `@code-analyzer/parser`; produces correct `Module`/
-      `Symbol`/`FunctionEntity`/`ClassEntity`/`ImportBinding`/`ExportBinding` for every fixture.
-- [ ] Malformed-file fixture produces a `ParseError`/`Diagnostic`, not a thrown exception, and every
-      other fixture file still parses in the same run.
-- [ ] A real `ProjectIndexer` is wired into `AnalyzerClient` and exercised by an end-to-end test
-      using real Phase 1 discovery output as input (not a hand-built `ProjectModel`).
-- [ ] Determinism test: parsing the same fixture twice yields identical output.
-- [ ] `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint` all pass clean across the whole
-      workspace.
-- [ ] `docs/project-status.md` updated to move this task from "next approved" to "completed".
-- [ ] Human review of the implementation (parser choice, ID scheme, fixture coverage) before Phase 3
-      (Graph Foundation) is drafted for approval.
+- [x] Parser implemented and exported from `@code-analyzer/parser`
+      (`packages/parser/src/parse-file.ts`); produces correct `Module`/`Symbol`/`FunctionEntity`/
+      `ClassEntity`/`ImportBinding`/`ExportBinding` for every fixture.
+- [x] Malformed-file fixture produces a `ParseError`/`Diagnostic`, not a thrown exception, and every
+      other fixture file still parses in the same run (verified both at the `parseFile` unit level
+      and through the full end-to-end scan).
+- [x] A real `ProjectIndexer` (`parserProjectIndexer`, `packages/parser/src/project-indexer.ts`) is
+      wired into `AnalyzerClient` and exercised by an end-to-end test using real Phase 1 discovery
+      output as input (not a hand-built `ProjectModel`).
+- [x] Determinism test: parsing the same fixture twice yields identical `Symbol`/`FunctionEntity` IDs.
+- [x] `pnpm build`, `pnpm typecheck`, `pnpm test` (43/43), `pnpm lint` all pass clean across the
+      whole workspace.
+- [x] `docs/project-status.md` updated to move this task from "next approved" to "completed".
+- [ ] Human review of the implementation (parser choice, ID scheme, fixture coverage, and the
+      known `ProjectIndexer.index()` diagnostics-channel gap flagged in
+      `packages/parser/src/project-indexer.ts`) before Phase 3 (Graph Foundation) is drafted.

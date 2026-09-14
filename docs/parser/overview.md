@@ -15,14 +15,24 @@ directly. Analyzers consume `Module`, `Symbol`, `FunctionEntity`, `ClassEntity` 
 - `ParseError` (`packages/core/src/errors/errors.ts`) — syntax-error tolerance (Section 2) means a
   parse failure on one file is a `Diagnostic`, not a thrown exception that aborts the whole scan.
 
-## What Phase 2 must decide (not decided in Phase 0)
+## Phase 2: implemented
 
-- Tree-sitter vs. TypeScript compiler API vs. both, per language (Section 4: "mature parsers...
-  especially Tree-sitter and/or language-native parsers").
+`docs/decisions/ADR-0006-parser-choice-and-id-scheme.md` (Accepted) settled parser technology
+(TypeScript Compiler API, not Tree-sitter, for JS/TS), the entity ID scheme (deterministic
+`(modulePath, kind, name, declaration offset)`), and scope (per-file only — cross-file import
+resolution is Phase 3's Module Graph job). `@code-analyzer/parser` implements this:
+`parse-file.ts` (the pure per-file parse), `ids.ts`, `location.ts`, `project-indexer.ts` (the
+`ProjectIndexer` composing it over every eligible `SourceFile`). See `docs/project-status.md` for
+current test/fixture coverage. Tree-sitter remains the documented fallback for a future language
+with no compiler-API equivalent.
+
+## Still undecided (out of Phase 2's scope, not forgotten)
+
 - Incremental re-parse strategy (Section 2: "incremental parsing where possible") and how it
   interacts with the Section 29 incremental-scan cache.
 - Symbol resolution strategy for genuinely dynamic JS (Section 4's call graph `dynamic`/`unknown`
-  certainty exists specifically because this can't always be fully resolved statically).
-
-Do not start implementing `packages/parser` until a `docs/tasks/phase-2-*.md` task spec exists and
-is approved (Section 50/51).
+  certainty exists specifically because this can't always be fully resolved statically) — Phase 4's
+  concern once a call graph exists to apply it to.
+- How `ParseError`/`Diagnostic`s produced during parsing reach `ScanResult.diagnostics` —
+  `ProjectIndexer.index()` currently has no return channel for them (flagged in
+  `packages/parser/src/project-indexer.ts` and `docs/project-status.md`'s technical debt list).

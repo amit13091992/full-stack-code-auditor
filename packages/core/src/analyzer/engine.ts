@@ -73,6 +73,7 @@ export class ScanEngine {
     const scanId = randomUUID() as ScanId;
     const events = new SimpleEventEmitter();
     const controller = new AbortController();
+    if (options.signal?.aborted) controller.abort();
     options.signal?.addEventListener("abort", () => controller.abort());
     const signal = controller.signal;
     const startedAt = new Date();

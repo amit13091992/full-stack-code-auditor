@@ -9,7 +9,7 @@ import type {
   ProjectId,
   ProjectModel,
 } from "../../packages/core/src/index.js";
-import { AnalyzerClient } from "../../packages/core/src/index.js";
+import { AnalyzerClient, ScanCancelledError } from "../../packages/core/src/index.js";
 
 function emptyProject(): ProjectModel {
   return {
@@ -157,5 +157,24 @@ describe("AnalyzerClient / ScanEngine lifecycle", () => {
 
     const result = await client.scan();
     expect(result.findings[0]?.risk?.severity).toBe("info");
+  });
+
+  it("rejects with ScanCancelledError and emits scan:cancelled when the signal is already aborted", async () => {
+    const registry = new InMemoryRegistry();
+    registry.register(fixtureAnalyzer);
+
+    const client = new AnalyzerClient({
+      config: testConfig(),
+      registry,
+      strategies: {
+        discoverer: { discover: async () => emptyProject() },
+        indexer: { index: async (project) => ({ project, graphs: {} }) },
+      },
+    });
+
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(client.scan({ signal: controller.signal })).rejects.toBeInstanceOf(ScanCancelledError);
   });
 });

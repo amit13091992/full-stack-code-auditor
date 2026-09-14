@@ -15,12 +15,14 @@ primary detection mechanism.
 
 ## Status
 
-**Phase 1 — Repository Intelligence**, plus a working CLI. Phase 0 (domain model, core contracts,
-analyzer lifecycle) is signed off. Phase 1's `RepositoryDiscoverer` — filesystem discovery, file
-classification, package-manager/workspace detection, framework detection — is implemented and
-tested end-to-end through the real `AnalyzerClient` lifecycle. `code-analyzer scan <root>` runs a
-real scan and produces a JSON/SARIF/HTML report today, though `findings` is legitimately empty
-until a real analyzer exists (that's Phase 5+ — see [ADR-0007](docs/decisions/ADR-0007-cli-reporting-exporters.md)).
+**Phase 2 — AST & Semantic Source Model**, plus a working CLI. Phase 0 (domain model, core
+contracts, analyzer lifecycle) and Phase 1 (`RepositoryDiscoverer` — filesystem discovery, file
+classification, package-manager/workspace detection, framework detection) are signed off. Phase 2's
+`@code-analyzer/parser` — TypeScript Compiler API parsing into `Module`/`Symbol`/`FunctionEntity`/
+`ClassEntity` (ADR-0006) — is implemented and tested end-to-end through the real `AnalyzerClient`
+lifecycle, running on real Phase 1 discovery output. `code-analyzer scan <root>` runs a real scan
+and produces a JSON/SARIF/HTML report today, though `findings` is legitimately empty until a real
+analyzer exists (that's Phase 5+ — see [ADR-0007](docs/decisions/ADR-0007-cli-reporting-exporters.md)).
 See [`docs/project-status.md`](docs/project-status.md) for the authoritative, up-to-date state
 before starting any substantial work.
 
@@ -30,7 +32,7 @@ before starting any substantial work.
 |---|---|
 | `@code-analyzer/core` | Domain model, contracts, and the `ScanEngine` lifecycle. Zero dependencies on other workspace packages, no analysis logic. |
 | `@code-analyzer/project-model` | Repository discovery -> normalized `ProjectModel` (Phase 1, implemented). |
-| `@code-analyzer/parser` | AST / semantic source model (Phase 2). |
+| `@code-analyzer/parser` | AST / semantic source model — TypeScript Compiler API parsing (Phase 2, implemented, ADR-0006). |
 | `@code-analyzer/graph` | Module, dependency, call, and taint graphs (Phase 3-5). |
 | `@code-analyzer/analyzers` | Individual analysis rules (security, architecture, quality, performance, dependency, secrets, infrastructure). |
 | `@code-analyzer/engines` | Engine-level composition, finding correlation, risk scoring. |

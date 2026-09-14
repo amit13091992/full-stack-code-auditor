@@ -54,14 +54,14 @@ async function readPnpmWorkspaceGlobs(root: string): Promise<readonly string[] |
       inPackages = true;
       continue;
     }
-    if (inPackages) {
-      const match = /^\s*-\s*["']?([^"'#]+)["']?\s*$/.exec(line);
-      if (match?.[1]) {
-        globs.push(match[1].trim());
-        continue;
-      }
-      break;
+    if (!inPackages) continue;
+    if (/^\s*$/.test(line) || /^\s*#/.test(line)) continue; // blank line or full-line comment — keep scanning
+    const match = /^\s*-\s*["']?([^"'#]+?)["']?\s*(?:#.*)?$/.exec(line);
+    if (match?.[1]) {
+      globs.push(match[1].trim());
+      continue;
     }
+    break; // a non-blank, non-comment, non-list-item line ends the `packages:` list
   }
   return globs;
 }
@@ -73,7 +73,13 @@ function workspaceGlobsFromPackageJson(pkg: PackageJson): readonly string[] | un
   return (workspaces as { readonly packages?: readonly string[] }).packages;
 }
 
-/** Expands a trivial `dir/*` glob to its immediate child directories that contain a package.json; an exact path resolves to itself. */
+/**
+ * Expands a trivial `dir/*` glob to its immediate child directories that contain a package.json;
+ * an exact path resolves to itself. A pnpm/npm negation entry (e.g. `!packages/excluded`) is not
+ * recognized as negation — it's treated as a literal path, resolves to no package.json, and is
+ * silently filtered out below. That happens to produce the same net effect as honoring the
+ * negation today, but only by coincidence; this does not implement exclusion semantics (ADR-0005).
+ */
 async function expandWorkspaceGlob(root: string, glob: string): Promise<readonly string[]> {
   if (!glob.endsWith("/*")) return [glob];
   const parentRelative = glob.slice(0, -2);

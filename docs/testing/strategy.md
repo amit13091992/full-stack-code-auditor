@@ -12,8 +12,19 @@ tests/                    unit + integration tests, mirrors packages/*/src struc
   project-model/
     discover.test.ts       classification/detection/determinism tests (Phase 1)
     end-to-end.test.ts     real discovery through the actual AnalyzerClient lifecycle (Phase 1)
+    package-manager.test.ts  package-manager/workspace-glob unit tests
+  cli/
+    args.test.ts           argument-parsing tests (CLI & Reporting task)
+    exporters.test.ts      json/sarif/html ResultExporter tests, incl. HTML-injection escaping
+    scan-command.test.ts   `scan` command success/failure paths
+    export-command.test.ts `export` command success/failure paths
+  parser/
+    parse-file.test.ts     per-file parse unit tests (Phase 2): symbols/functions/classes/
+                            imports/exports, determinism, malformed-file tolerance
+    end-to-end.test.ts     real discovery -> real parsing through AnalyzerClient (Phase 2)
 fixtures/                 input repositories + expected-output fixtures (Section 30)
   project-model/          Phase 1 repository-discovery fixtures (see below)
+  parser/                 Phase 2 parser fixtures (see below)
   security/
     sql-injection/
     ssrf/
@@ -35,10 +46,19 @@ expected findings, expected paths, expected severity, expected confidence range 
 a matching **false-positive** fixture (Section 30: "as important as vulnerability fixtures").
 
 `fixtures/project-model/` (Phase 1) is populated: `node-express` (npm), `nestjs-app` (pnpm),
-`nextjs-app` (yarn), `react-native-app` (bun), `monorepo-pnpm` (2 workspace packages), and
+`nextjs-app` (yarn), `react-native-app` (bun), `monorepo-pnpm` (2 workspace packages),
+`monorepo-pnpm-gaps` (a `pnpm-workspace.yaml` with a comment and a blank line inside the
+`packages:` list — regression fixture), `no-manifest` (no `package.json`/lockfile at all), and
 `generated-code` (exercises every `SourceClassification` — generated, vendored, infrastructure,
-test, documentation, asset, config, source). These aren't security fixtures, so they define
+test, documentation, asset, config, source, unknown). These aren't security fixtures, so they define
 expected classification/framework/package-manager output rather than expected findings.
+
+`fixtures/parser/basic-constructs/` (Phase 2) is populated: `functions.ts` (function declaration +
+arrow function), `shapes.ts` (interface, type alias, enum, decorated/inherited classes, multiple
+`implements` clauses, static members, getter/setter accessors, a non-exported class),
+`imports-exports.ts` (every import/export kind), `plain.js` (the `allowJs` path), `malformed.ts`
+(intentional syntax error for `ParseError` tolerance), `component.tsx` (JSX/TSX `ScriptKind` path),
+`data.json` (a non-JS/TS file exercising `parserProjectIndexer`'s language-skip branch).
 
 ## What Phase 0 tests
 
@@ -68,9 +88,22 @@ real `Analyzer` that reads `context.project.files` and emits findings for every 
 classified file — proving the full `discover → index → analyze → correlate → finalize` pipeline
 works end-to-end with actual filesystem discovery, not a fixture double.
 
+## What Phase 2 tests
+
+`tests/parser/parse-file.test.ts` runs `parseFile()` against each fixture under
+`fixtures/parser/basic-constructs/` and asserts exact `Symbol`/`FunctionEntity`/`ClassEntity`/
+`ImportBinding`/`ExportBinding` shapes (every import/export kind, class inheritance resolved only
+within the same file per ADR-0006, decorators/visibility/readonly on class members), a determinism
+test (parsing the same content twice yields identical entity IDs), and malformed-file tolerance
+(a syntax error produces a `Diagnostic`, `parseFile` never throws).
+
+`tests/parser/end-to-end.test.ts` wires `parserProjectIndexer` into a real `AnalyzerClient` after
+real Phase 1 discovery, with a real `Analyzer` (`quality/exported-function-count`) reading
+`context.project.functions` — proving discovery → parsing → analysis works end-to-end, and that the
+malformed fixture file doesn't abort the scan.
+
 ## Test categories to add as each phase lands (Section 30)
 
-- **Parser tests** (Phase 2): AST normalization, syntax-error tolerance, incremental re-parse.
 - **Graph tests** (Phase 3-5): edge certainty correctness, path reconstruction, cycle handling.
 - **Taint tests** (Phase 5): source→sink fixtures, sanitizer recognition, false-positive fixtures.
 - **Regression tests**: one per closed bug, referencing the fixture or scenario that caused it.

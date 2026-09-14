@@ -4,7 +4,9 @@ import tsParser from "@typescript-eslint/parser";
 
 export default [
   {
-    ignores: ["**/dist/**", "**/node_modules/**", "**/*.tsbuildinfo"],
+    // fixtures/ are intentionally-shaped input repositories (malformed syntax, unused bindings,
+    // etc. by design — Section 30) for parser/discovery tests, not project source — never lint them.
+    ignores: ["**/dist/**", "**/node_modules/**", "**/*.tsbuildinfo", "fixtures/**"],
   },
   {
     files: ["**/*.ts"],
