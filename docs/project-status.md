@@ -6,16 +6,17 @@ that decision is made by a human and recorded here.
 
 ## Current phase
 
-**Phase 2 — AST & Semantic Source Model** (Phase 0 and Phase 1 signed off by human,
-amit13091992@gmail.com; ADR-0006 and Phase 2 implementation approved by the same)
+**Phase 3 — Graph Foundation** (Phase 0/1/2 signed off by human, amit13091992@gmail.com; Phase 3
+approved by the same)
 
 ## Current milestone
 
-Phase 2 deliverable per `docs/tasks/phase-2-ast-semantic-model.md` is **complete**:
-`@code-analyzer/parser` parses every eligible JS/TS file via the TypeScript Compiler API
-(ADR-0006) into `Module`/`Symbol`/`FunctionEntity`/`ClassEntity`, wired into a real
-`parserProjectIndexer` and verified end-to-end through the real `ScanEngine`/`AnalyzerClient`
-lifecycle with real Phase 1 discovery as input. Awaiting human review before starting Phase 3.
+Phase 3 deliverable per `docs/tasks/phase-3-graph-foundation.md` is **complete**:
+`@code-analyzer/graph` provides a concrete in-process `Graph` (ADR-0003) plus Module Graph
+(cross-file `IMPORTS` resolution — what ADR-0006 deferred from Phase 2) and Symbol Graph
+(`DECLARES`/`EXTENDS`/`IMPLEMENTS`) builders, wired into a real `graphProjectIndexer` and verified
+end-to-end through `AnalyzerClient` with real Phase 1+2 output as input. Awaiting human review
+before starting Phase 4.
 
 ## Completed components
 
@@ -63,13 +64,38 @@ lifecycle with real Phase 1 discovery as input. Awaiting human review before sta
   a file boundary). `parserProjectIndexer` (`src/project-indexer.ts`) wires it into a real
   `ProjectIndexer`, parsing every file whose `language` is `javascript`/`typescript` and
   `classification` is not `generated`/`vendored`/`asset`. `fixtures/parser/basic-constructs/`
-  covers every construct in the task spec plus one intentionally malformed file. 10 tests across
-  `tests/parser/` (8 unit, 2 real end-to-end through `AnalyzerClient` with a real `Analyzer`
-  reading `context.project.functions`).
+  covers every construct in the task spec plus one intentionally malformed file. Also covers
+  **CommonJS** (`require()`/`module.exports`/`exports.foo`, `fixtures/parser/basic-constructs/
+  commonjs.js`) — added post-Phase-2 in response to a user question about legacy Node.js support;
+  reuses the existing `ImportKind`/`ExportKind` values, no core contract change, and required zero
+  changes to `buildModuleGraph` since it's binding-kind-agnostic (proven by
+  `fixtures/graph/module-links/commonjs/`). `tests/parser/` now has 15 tests total: 11 unit
+  (`parse-file.test.ts`, incl. 2 CommonJS tests), 1 for the file-size DoS mitigation
+  (`project-indexer.test.ts`, see technical debt below), and 3 real end-to-end
+  (`end-to-end.test.ts`) through `AnalyzerClient` with real `Analyzer`s.
+- `@code-analyzer/graph` (Phase 3): `InMemoryGraph` — the concrete `Graph` implementation
+  (ADR-0003), adjacency-list-backed, with BFS `findPaths` (all-shortest-paths, cycle-safe within a
+  path, respects `maxDepth` in edges). `buildModuleGraph` (`src/module-graph.ts`) resolves Phase
+  2's per-file `ImportBinding.specifier`s against the rest of the project — extensionless,
+  ESM-style `.js`-pointing-at-`.ts`, directory/`index.*`, and bare `"."`/`".."` relative-directory
+  forms all handled (the last one added during graph-engineer review); bare/external and
+  genuinely-unresolvable specifiers correctly produce no edge rather than a wrong one.
+  `buildSymbolGraph` (`src/symbol-graph.ts`) produces `DECLARES` edges (module → symbol/function/
+  class) and `EXTENDS`/`IMPLEMENTS` edges from Phase 2's already-resolved same-file class
+  relationships. `graphProjectIndexer` (`src/project-indexer.ts`) composes `parserProjectIndexer`
+  then builds both graphs, populating `AnalyzerContext.graphs.moduleGraph`/`.symbolGraph` for the
+  first time (Phase 0-2 always left `graphs: {}`). 17 tests across `tests/graph/` (8 graph-
+  primitive unit tests incl. `nodeType` query filtering, 7 builder tests against real parsed
+  fixtures — including a 3-hop import chain, the `.`/`..` fix's regression test, and a CommonJS
+  `require()` resolution test, 1 direct `graphProjectIndexer` unit test with a spied logger, 1 real
+  end-to-end test with an `Analyzer` reading `context.graphs.moduleGraph`).
+  **Reviewed by architect, graph-engineer, test-engineer, security-engineer, and
+  documentation-engineer** — all clean; graph-engineer's one finding (bare `"."`/`".."` specifiers
+  misclassified as external) was fixed and pinned with a fixture + test in the same pass.
 
 ## In-progress components
 
-None — Phase 1, the CLI & Reporting task, and Phase 2 are all complete, pending human review.
+None — Phase 1, the CLI & Reporting task, Phase 2, and Phase 3 are all complete, pending human review.
 
 ## Blocked components
 
@@ -88,12 +114,26 @@ None.
   dependency yet: ADR-0007.
 - Parser: TypeScript Compiler API (not Tree-sitter) for JS/TS, deterministic entity IDs, per-file
   (not cross-file) scope this phase: ADR-0006.
+- Phase 3 needed **no new ADR** — `Graph`/`GraphAccess`/`EdgeRelationType`/`EdgeCertainty` from
+  Phase 0 already fit the Module Graph/Symbol Graph scope exactly, verified before implementation
+  started. One inter-package dependency decision was made inline (documented in
+  `packages/graph/src/project-indexer.ts`'s doc comment, not a separate ADR since it doesn't
+  change any frozen contract): `@code-analyzer/graph` depends on `@code-analyzer/parser` directly
+  (not just `core`) so its composing `ProjectIndexer` can run real parsing before building graphs
+  over the result — a non-cyclic, ADR-0001-compatible edge (`parser` does not depend on `graph`).
 
 ## Known technical debt
 
-- Stub packages (`graph`, `analyzers`, `engines`, `integrations`, `ai`, `plugins`) still contain
-  only `package.json` + empty `src/index.ts` — intentional, gated on their own phase.
-  (`parser` and `cli` are no longer stubs.)
+- Stub packages (`analyzers`, `engines`, `integrations`, `ai`, `plugins`) still contain only
+  `package.json` + empty `src/index.ts` — intentional, gated on their own phase. (`parser`, `graph`,
+  and `cli` are no longer stubs.)
+- **Non-JS/TS languages have no semantic model at all** — only `javascript`/`typescript`/`json`/
+  `yaml`/`sql`/`dockerfile` are recognized `LanguageId`s (Section 5's initial scope). A Python-,
+  Go-, Java-, Ruby-, or Rust-based repository (most AI/ML codebases included) gets basic file
+  discovery/classification only — every source file is tagged `language: "unknown"`, with zero
+  parsing, zero Module/Symbol Graph coverage. Supporting a new language needs a `LanguageId` union
+  change (a core contract change — ADR + architect review) plus a real parser for it (Tree-sitter,
+  per ADR-0006's documented fallback) — this is phase-sized work, not a quick addition.
 - Workspace glob expansion only supports an exact path or a trailing `/*` — no `**`/brace patterns
   (ADR-0005). Revisit against a real fixture that needs it.
 - No persistent cache/incremental-analysis implementation yet (`IncrementalConfig` is a contract
@@ -129,20 +169,43 @@ None.
   `AnalyzerConfig` in a later phase, so a repo with legitimately huge but wanted source files (rare,
   e.g. a large generated-but-unclassified data fixture) isn't silently blind-spotted forever.
 - `code-analyzer scan`'s indexer is still the Phase 0 passthrough stub, not the real
-  `parserProjectIndexer` from Phase 2 — wiring the CLI to real parsing was intentionally left out of
-  Phase 2's scope (belongs to `docs/tasks/cli-and-reporting.md` instead); natural small follow-up.
-- Parser scope is per-file only (ADR-0006): `extendsSymbolId`/`implementsSymbolIds` only resolve
-  when the base class/interface is declared in the *same* file; cross-file resolution is Phase 3's
-  Module/Symbol Graph job, not a parser bug.
+  `parserProjectIndexer` (Phase 2) or `graphProjectIndexer` (Phase 3) — wiring the CLI to real
+  parsing/graph-building was intentionally left out of both phases' scope (belongs to
+  `docs/tasks/cli-and-reporting.md` instead); natural small follow-up, now with two real indexers
+  to choose from.
+- `ClassEntity.extendsSymbolId`/`.implementsSymbolIds` (Phase 2, carried into the Symbol Graph's
+  `EXTENDS`/`IMPLEMENTS` edges by Phase 3) still only resolve when the base class/interface is
+  declared in the *same file* — Phase 3 resolved **import** cross-file references (the Module
+  Graph) but did not extend cross-file resolution to class hierarchies; that would need a second
+  pass correlating an imported symbol's name against its resolved module's declarations, not yet
+  built. Not a bug in either phase — just not yet in scope for either.
 - No parameter-property (`constructor(private x: number)`) → `ClassProperty` support — such a
   parameter is only visible via the constructor's `FunctionEntity.parameters`, not as a class
   property. Not in Phase 2's stated scope; revisit if an analyzer needs it.
-
-## Next approved tasks
+- Module Graph has no `node_modules`/external-package resolution (Phase 3, intentional non-goal) —
+  a bare specifier like `"react"` produces no `IMPORTS` edge at all, not an edge to an "external"
+  placeholder node. Revisit only once Section 13's `Dependency[]` actually exists (still deferred,
+  ADR-0005) — an external-package node without dependency data behind it wouldn't be very useful.
+- No `REFERENCES` edges in the Symbol Graph — Phase 2 never collected `SymbolReference` occurrences
+  (only declarations), so there's nothing for Phase 3 to build a graph over yet. `EdgeRelationType`
+  already has `REFERENCES` in its Phase 0 union; populating it needs its own small parser-side task.
+- No Dependency Graph (`DEPENDS_ON` edges) — same root cause as the `node_modules` gap above:
+  `ProjectModel.dependencies` doesn't exist yet (ADR-0005).
+- No graph persistence/serialization for incremental-analysis caching (Section 29) — `InMemoryGraph`
+  is rebuilt from scratch on every scan; still deferred, same as Phase 1/2's caching gaps.
+- **`InMemoryGraph.findPaths` has no size/branching bound** (security-review flagged, not fixed —
+  currently unreachable: nothing calls `findPaths` yet, only `addNode`/`addEdge`/`getEdge` via the
+  Module/Symbol Graph builders). A densely-connected malicious repository could make a future
+  `findPaths` call over an untrusted-repo-derived graph expensive in time and memory. Track this:
+  add an explicit node/edge/queue-size cap (or a documented max on `nodeCount`/`edgeCount`) before
+  any Phase 4+ analyzer actually calls `findPaths` — the right bound is that analyzer's call to
+  make, not something to guess at speculatively now (Section 4/35.7).
 
 Phase 1 (`docs/tasks/phase-1-repository-discovery.md`), the CLI & Reporting task
-(`docs/tasks/cli-and-reporting.md`, ADR-0007), and Phase 2
-(`docs/tasks/phase-2-ast-semantic-model.md`, ADR-0006) are all **implemented and tested** — all
-pending human review before: Phase 3 (Graph Foundation) is drafted for approval, the CLI is wired
-into any CI/CD adapter or published to npm, and (for Phase 2 specifically) the `ProjectIndexer`
-diagnostics-channel gap noted above is decided on.
+(`docs/tasks/cli-and-reporting.md`, ADR-0007), Phase 2
+(`docs/tasks/phase-2-ast-semantic-model.md`, ADR-0006), and Phase 3
+(`docs/tasks/phase-3-graph-foundation.md`) are all **implemented and tested** — all pending human
+review before: Phase 4 (Call Graph) is drafted for approval, the CLI is wired into any CI/CD
+adapter or published to npm, and the `ProjectIndexer` diagnostics-channel gap (ADR-0008, flagged
+during Phase 2 review) is decided on — ideally before Phase 4 adds a third real `ProjectIndexer`-
+composing package.

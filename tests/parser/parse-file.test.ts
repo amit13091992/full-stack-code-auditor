@@ -197,6 +197,40 @@ describe("parseFile / plain.js", () => {
   });
 });
 
+describe("parseFile / commonjs.js", () => {
+  it("extracts require() calls as ImportBindings (default, named-destructured, and side-effect)", async () => {
+    const result = await parseFixture("commonjs.js");
+    expect(result.diagnostics).toHaveLength(0);
+
+    const defaultRequire = result.module.imports.find((i) => i.localName === "express");
+    expect(defaultRequire?.kind).toBe("default");
+    expect(defaultRequire?.specifier).toBe("express");
+    expect(defaultRequire?.resolvedModuleId).toBeUndefined(); // cross-file resolution is the Module Graph's job (ADR-0006)
+
+    const namedRequires = result.module.imports.filter((i) => i.specifier === "./fs-helpers.js");
+    expect(namedRequires).toHaveLength(2);
+    expect(namedRequires.every((i) => i.kind === "named")).toBe(true);
+    expect(namedRequires.find((i) => i.localName === "readFile")?.importedName).toBe("readFile");
+    expect(namedRequires.find((i) => i.localName === "saveFile")?.importedName).toBe("writeFile");
+
+    const sideEffect = result.module.imports.find((i) => i.specifier === "./setup-side-effects.js");
+    expect(sideEffect?.kind).toBe("side-effect");
+  });
+
+  it("extracts module.exports / module.exports.foo / exports.foo as ExportBindings", async () => {
+    const result = await parseFixture("commonjs.js");
+
+    const wholeModuleExport = result.module.exports.find((e) => e.kind === "default");
+    expect(wholeModuleExport?.exportedName).toBe("default");
+    // `module.exports = createServer;` — createServer is a locally declared function, resolved.
+    const createServer = result.functions.find((f) => f.name === "createServer");
+    expect(wholeModuleExport?.symbolId).toBe(createServer?.symbolId);
+
+    const namedExports = result.module.exports.filter((e) => e.kind === "named").map((e) => e.exportedName).sort();
+    expect(namedExports).toEqual(["readFile", "saveFile"]);
+  });
+});
+
 describe("parseFile / malformed.ts", () => {
   it("tolerates a syntax error: returns a Diagnostic instead of throwing", async () => {
     const result = await parseFixture("malformed.ts");

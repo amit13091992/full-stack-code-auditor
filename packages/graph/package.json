@@ -1,7 +1,7 @@
 {
   "name": "@code-analyzer/graph",
   "version": "0.0.0",
-  "description": "Phase 3-5: concrete Graph implementation plus module/dependency/symbol/call-graph/taint-graph builders on top of the core Graph contract.",
+  "description": "Phase 3 (implemented): in-process Graph implementation plus Module Graph and Symbol Graph builders. Phase 4-5 add call-graph/taint-graph builders on top of the same core Graph contract.",
   "license": "UNLICENSED",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,7 +12,8 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@code-analyzer/core": "workspace:*"
+    "@code-analyzer/core": "workspace:*",
+    "@code-analyzer/parser": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

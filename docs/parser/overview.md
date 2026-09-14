@@ -26,6 +26,14 @@ resolution is Phase 3's Module Graph job). `@code-analyzer/parser` implements th
 current test/fixture coverage. Tree-sitter remains the documented fallback for a future language
 with no compiler-API equivalent.
 
+**Both module systems are covered**, not just ES modules: `parse-file.ts` also recognizes CommonJS
+`require()` (as `ImportBinding`s — `default` for `const x = require(...)`, `named` for
+`const { a, b } = require(...)`, `side-effect` for a bare `require(...)` statement) and
+`module.exports`/`module.exports.foo`/`exports.foo` (as `ExportBinding`s). This reuses the existing
+`ImportKind`/`ExportKind` values — no core contract change — and required zero changes to
+`buildModuleGraph` (`packages/graph`), since it only ever reads `ImportBinding.specifier`,
+regardless of which module system produced it. Genuinely legacy, pre-ESM Node.js code is covered.
+
 ## Still undecided (out of Phase 2's scope, not forgotten)
 
 - Incremental re-parse strategy (Section 2: "incremental parsing where possible") and how it

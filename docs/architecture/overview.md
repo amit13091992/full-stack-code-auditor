@@ -8,7 +8,8 @@ Repository
   -> Normalized Project Model     (ProjectModel, packages/core/src/domain/project.ts)
   -> AST / Syntax Model           (packages/parser, Phase 2, internal detail)
   -> Symbol Model                 (Symbol/Module, packages/core/src/domain, Phase 2)
-  -> Dependency Graph             (packages/graph, Phase 3)
+  -> Module Graph / Symbol Graph  (packages/graph, Phase 3, implemented)
+  -> Dependency Graph             (packages/graph, blocked on Section 13's Dependency[] — see Known Gaps)
   -> Call Graph                   (packages/graph, Phase 4)
   -> Data-Flow / Taint Graph      (packages/graph, Phase 5)
   -> API Model                    (EndpointModel, Phase 1-plus framework adapters)
@@ -36,7 +37,7 @@ core  <---  project-model, parser, graph, analyzers, engines, integrations, ai, 
 `core` depends on nothing else in the workspace. No other package may be imported by `core`. This is
 enforced by `core`'s `package.json` having zero `@code-analyzer/*` dependencies — see ADR-0001.
 
-## Known gaps as of Phase 0
+## Known gaps as of Phase 3
 
 - Infrastructure Model (Section 15: Docker/K8s/Terraform/GitHub Actions/Nginx/cloud config) has no
   domain type yet. It was intentionally left out of the Section 37B list to implement — it will be
@@ -46,6 +47,10 @@ enforced by `core`'s `package.json` having zero `@code-analyzer/*` dependencies 
 - Runtime/DAST sandbox (Section 26, Section 31) is not modeled at all yet beyond `SandboxConfig` in
   `AnalyzerConfig`. It is a distinct execution environment, not a package boundary decision to make
   in Phase 0.
+- Dependency Graph (`DEPENDS_ON` edges) is blocked on `ProjectModel.dependencies` actually being
+  populated (Section 13, deferred since Phase 1's ADR-0005) — see `docs/project-status.md`.
+- `REFERENCES` edges (Symbol Graph) are blocked on Phase 2 not collecting symbol-occurrence data
+  yet — declarations only, not every place a symbol is used. See `docs/graph/overview.md`.
 
 ## Where to look for detail
 

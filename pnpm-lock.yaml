@@ -93,6 +93,9 @@ importers:
       '@code-analyzer/core':
         specifier: workspace:*
         version: link:../core
+      '@code-analyzer/parser':
+        specifier: workspace:*
+        version: link:../parser
     devDependencies:
       '@types/node':
         specifier: ^20.14.0

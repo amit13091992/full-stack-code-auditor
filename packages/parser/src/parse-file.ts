@@ -226,6 +226,8 @@ export function parseFile(params: { fileId: FileId; path: string; content: strin
 
   function visitVariableStatement(node: ts.VariableStatement, exported: boolean): void {
     for (const decl of node.declarationList.declarations) {
+      if (decl.initializer && visitRequireInitializer(decl.name, decl.initializer)) continue;
+
       const name = nameOf(decl);
       if (!name) continue; // destructuring patterns aren't tracked as a single named symbol (Phase 2 scope)
 
@@ -238,6 +240,98 @@ export function parseFile(params: { fileId: FileId; path: string; content: strin
 
       addSymbol("variable", name, decl, exported, decl.type?.getText(sourceFile));
     }
+  }
+
+  /**
+   * CommonJS support (Section 5's JS/TS scope covers both module systems — a lot of real,
+   * especially older, Node.js code never migrated off `require()`). Reuses the existing
+   * `ImportKind` values rather than adding a new one, since a `require()` call is semantically
+   * the same shape as an ES import, just spelled differently: `const x = require("y")` is a
+   * default-style import, `const { a, b } = require("y")` is named imports.
+   *
+   * Returns `true` if `initializer` was a `require(...)` call and was handled (so the caller
+   * skips its normal variable-declaration handling); `false` otherwise.
+   */
+  function visitRequireInitializer(bindingName: ts.BindingName, initializer: ts.Expression): boolean {
+    if (!isRequireCall(initializer)) return false;
+    const specifier = initializer.arguments[0];
+    if (!specifier || !ts.isStringLiteral(specifier)) return false; // require(someVariable) — not statically resolvable
+
+    if (ts.isIdentifier(bindingName)) {
+      imports.push({
+        fileId,
+        specifier: specifier.text,
+        kind: "default",
+        importedName: "default",
+        localName: bindingName.text,
+        location: toLocation(fileId, path, sourceFile, initializer),
+      });
+      return true;
+    }
+
+    if (ts.isObjectBindingPattern(bindingName)) {
+      for (const element of bindingName.elements) {
+        if (!ts.isIdentifier(element.name)) continue; // nested destructuring — Phase 2 scope doesn't track it
+        imports.push({
+          fileId,
+          specifier: specifier.text,
+          kind: "named",
+          importedName: (element.propertyName && ts.isIdentifier(element.propertyName) ? element.propertyName : element.name).text,
+          localName: element.name.text,
+          location: toLocation(fileId, path, sourceFile, element),
+        });
+      }
+      return true;
+    }
+
+    return false; // array destructuring, etc. — not a meaningful require() pattern
+  }
+
+  function isRequireCall(expr: ts.Expression): expr is ts.CallExpression {
+    return ts.isCallExpression(expr) && ts.isIdentifier(expr.expression) && expr.expression.text === "require" && expr.arguments.length > 0;
+  }
+
+  function visitBareRequireStatement(node: ts.ExpressionStatement): boolean {
+    if (!isRequireCall(node.expression)) return false;
+    const specifier = node.expression.arguments[0];
+    if (!specifier || !ts.isStringLiteral(specifier)) return false;
+    imports.push({ fileId, specifier: specifier.text, kind: "side-effect", location: toLocation(fileId, path, sourceFile, node) });
+    return true;
+  }
+
+  /**
+   * `module.exports = <expr>` (whole-module export, treated like a default export) and
+   * `module.exports.foo = <expr>` / `exports.foo = <expr>` (named export `"foo"`). If the
+   * right-hand side is a plain identifier referencing an already-declared local symbol, the
+   * export is resolved to it — same-file only, same discipline as every other resolution in
+   * this parser (ADR-0006).
+   */
+  function visitCommonJsExportStatement(node: ts.ExpressionStatement): boolean {
+    const expr = node.expression;
+    if (!ts.isBinaryExpression(expr) || expr.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return false;
+
+    const target = expr.left;
+    const rhsName = ts.isIdentifier(expr.right) ? expr.right.text : undefined;
+    const symbolId = rhsName ? localSymbolIdByName.get(rhsName) : undefined;
+
+    // `module.exports = ...`
+    if (ts.isPropertyAccessExpression(target) && ts.isIdentifier(target.expression) && target.expression.text === "module" && target.name.text === "exports") {
+      exports.push({ fileId, kind: "default", exportedName: "default", ...(symbolId ? { symbolId } : {}), location: toLocation(fileId, path, sourceFile, node) });
+      return true;
+    }
+
+    // `module.exports.foo = ...` or `exports.foo = ...`
+    if (ts.isPropertyAccessExpression(target)) {
+      const base = target.expression;
+      const isModuleExports = ts.isPropertyAccessExpression(base) && ts.isIdentifier(base.expression) && base.expression.text === "module" && base.name.text === "exports";
+      const isBareExports = ts.isIdentifier(base) && base.text === "exports";
+      if (isModuleExports || isBareExports) {
+        exports.push({ fileId, kind: "named", exportedName: target.name.text, ...(symbolId ? { symbolId } : {}), location: toLocation(fileId, path, sourceFile, node) });
+        return true;
+      }
+    }
+
+    return false;
   }
 
   function visitImportDeclaration(node: ts.ImportDeclaration): void {
@@ -330,6 +424,9 @@ export function parseFile(params: { fileId: FileId; path: string; content: strin
       visitExportDeclaration(node);
     } else if (ts.isExportAssignment(node)) {
       exports.push({ fileId, kind: "default", exportedName: "default", location: toLocation(fileId, path, sourceFile, node) });
+    } else if (ts.isExpressionStatement(node)) {
+      if (visitBareRequireStatement(node)) return;
+      visitCommonJsExportStatement(node);
     }
   }
 

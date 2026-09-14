@@ -1,7 +1,10 @@
 /**
- * @code-analyzer/graph — Phase 3-5 (Graph Foundation, Call Graph, Data-Flow/Taint Engine).
- *
- * Not implemented in Phase 0 (Section 3/37: contracts and package boundaries first). This
- * package's implementation begins once its phase's task spec under docs/tasks/ is approved.
+ * @code-analyzer/graph — Phase 3 (Graph Foundation). In-process `Graph` implementation (ADR-0003),
+ * Module Graph and Symbol Graph builders. See docs/tasks/phase-3-graph-foundation.md.
  */
-export {};
+export { InMemoryGraph } from "./in-memory-graph.js";
+export { buildModuleGraph } from "./module-graph.js";
+export { buildSymbolGraph } from "./symbol-graph.js";
+export { graphProjectIndexer } from "./project-indexer.js";
+export { moduleNodeId, symbolNodeId, functionNodeId, classNodeId, edgeId } from "./node-ids.js";
+export type { GraphNodeType } from "./node-ids.js";

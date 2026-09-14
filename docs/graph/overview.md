@@ -16,18 +16,30 @@ Contract: `packages/core/src/graph/graph.ts` — `Graph<TNodeData, TEdgeData>`.
 
 ## Which graph is which
 
-`AnalyzerContext.graphs` (Phase-0 contract, `packages/core/src/analyzer/context.ts`) names five
-optional slots, each a `Graph` instance built by `packages/graph`:
+`AnalyzerContext.graphs` (Phase-0 contract, `packages/core/src/analyzer/context.ts`) names six
+optional slots. Phase 3 implemented and populates two of them:
 
-- `moduleGraph` — `IMPORTS`/`EXPORTS` edges between modules (Phase 3)
-- `dependencyGraph` — `DEPENDS_ON` edges between packages (Phase 3)
-- `symbolGraph` — `DECLARES`/`REFERENCES` edges (Phase 3)
-- `callGraph` — `CALLS` edges with `EdgeCertainty` (Phase 4)
-- `taintGraph` — source-to-sink propagation edges backing `DataFlow` reconstruction (Phase 5)
-- `applicationGraph` — the Section 16 application-level graph (services, security boundaries)
+- `moduleGraph` — **implemented (Phase 3)**: `IMPORTS` edges between modules, built by
+  `buildModuleGraph` (`packages/graph/src/module-graph.ts`) resolving Phase 2's per-file
+  `ImportBinding.specifier`s against the rest of the project. `EXPORTS` edges aren't built as graph
+  edges — a module's exports are already directly available on `Module.exports`, no traversal
+  needed for that.
+- `symbolGraph` — **implemented (Phase 3)**: `DECLARES` edges (module → symbol/function/class) and
+  `EXTENDS`/`IMPLEMENTS` edges (same-file only, from Phase 2's already-resolved data), built by
+  `buildSymbolGraph` (`packages/graph/src/symbol-graph.ts`). `REFERENCES` edges are **not** built —
+  Phase 2 never collected symbol-occurrence data to build them from (see `docs/project-status.md`).
+- `dependencyGraph` — **not yet implemented**: `DEPENDS_ON` edges between packages, blocked on
+  Section 13's `Dependency[]` actually existing (still deferred, ADR-0005) — see
+  `docs/project-status.md`'s technical debt.
+- `callGraph` — `CALLS` edges with `EdgeCertainty` (Phase 4, not yet implemented)
+- `taintGraph` — source-to-sink propagation edges backing `DataFlow` reconstruction (Phase 5, not
+  yet implemented)
+- `applicationGraph` — the Section 16 application-level graph (services, security boundaries;
+  Phase 6+, not yet implemented)
 
-All five are optional on `GraphAccess` because a given `ScanProfile` may not build all of them
-(e.g. `minimal` skips call/taint graphs entirely for speed, Section 28).
+All six are optional on `GraphAccess` because a given `ScanProfile` may not build all of them
+(e.g. `minimal` skips call/taint graphs entirely for speed, Section 28) — and, as of Phase 3, also
+because three of them genuinely don't exist as real implementations yet.
 
 ## Path reconstruction
 
@@ -36,12 +48,18 @@ All five are optional on `GraphAccess` because a given `ScanProfile` may not bui
 Section 16's architecture-rule violation paths. `packages/graph` owns the traversal algorithm;
 `core` only defines the shape of the result (`PathResult`).
 
-## Not yet decided (deferred past Phase 0)
+## Phase 3: decided
 
-- Whether `packages/graph`'s concrete implementation is a single generic adjacency-list graph
-  reused for all five slots, or five specialized structures sharing the `Graph` interface. Either
-  is valid against the Phase 0 contract; decide when Phase 3 is scoped, based on real profiling
-  rather than speculation (Section 35.7/35.13).
-- Persistence format for incremental-analysis caching (Section 29) — the `Graph` interface has no
-  serialize/deserialize method yet because we don't want to freeze a cache format before Phase 3
-  exists.
+`packages/graph`'s concrete implementation is **one generic adjacency-list structure**
+(`InMemoryGraph`, `packages/graph/src/in-memory-graph.ts`), reused for both `moduleGraph` and
+`symbolGraph` (and presumably `callGraph`/`taintGraph` when those land) rather than a bespoke
+structure per slot — no profiling data suggested a need for anything more specialized yet
+(Section 35.7/35.13: don't add complexity speculatively). `findPaths` is BFS-based (shortest path,
+cycle-safe via a visited-in-this-path check, respects `maxDepth`).
+
+## Not yet decided (deferred past Phase 3)
+
+- Persistence format for incremental-analysis caching (Section 29) — the `Graph` interface still
+  has no serialize/deserialize method; `InMemoryGraph` is rebuilt from scratch on every scan.
+- Whether a `callGraph`/`taintGraph` genuinely wants the same `InMemoryGraph` structure or something
+  more specialized — revisit with real data once Phase 4/5 are actually scoped, not before.
