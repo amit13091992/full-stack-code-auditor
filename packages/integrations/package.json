@@ -1,0 +1,21 @@
+{
+  "name": "@code-analyzer/integrations",
+  "version": "0.0.0",
+  "description": "External analyzer normalization (CodeQL, Semgrep, OSV, Trivy, Gitleaks, SARIF) and CI/CD adapters (GitHub Actions, GitLab CI, etc.).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@code-analyzer/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^20.14.0"
+  }
+}

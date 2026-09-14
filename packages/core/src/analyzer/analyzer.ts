@@ -1,0 +1,45 @@
+import type { FrameworkId } from "../domain/project.js";
+import type { AnalysisResult } from "./result.js";
+import type { AnalyzerContext } from "./context.js";
+
+export type AnalyzerCategory =
+  | "security"
+  | "architecture"
+  | "quality"
+  | "performance"
+  | "dependency"
+  | "secrets"
+  | "infrastructure";
+
+export interface AnalyzerCapabilities {
+  readonly category: AnalyzerCategory;
+  /** Frameworks this analyzer is meaningful for. Empty = framework-agnostic. */
+  readonly frameworks?: readonly FrameworkId[];
+  readonly requiresGraphs?: readonly (keyof AnalyzerContext["graphs"])[];
+}
+
+/**
+ * The contract every analysis engine and rule ultimately implements (Section 37C, Section 7).
+ * An Analyzer is a pure function of AnalyzerContext -> AnalysisResult: it must not mutate the
+ * ProjectModel or graphs it is given, and it must not perform its own file I/O or AST parsing —
+ * both are already normalized into `context.project` before `analyze()` runs.
+ */
+export interface Analyzer {
+  readonly id: string;
+  readonly name: string;
+  readonly version: string;
+  readonly capabilities: AnalyzerCapabilities;
+
+  /** Cheap check run before `analyze()` — e.g. skip a NestJS-specific analyzer on a plain Express repo. */
+  supports(context: AnalyzerContext): boolean;
+
+  analyze(context: AnalyzerContext): Promise<AnalysisResult>;
+}
+
+/** Registry of available analyzers, queried by the scan engine to build a run plan for a profile. */
+export interface AnalyzerRegistry {
+  register(analyzer: Analyzer): void;
+  get(id: string): Analyzer | undefined;
+  list(): readonly Analyzer[];
+  listByCategory(category: AnalyzerCategory): readonly Analyzer[];
+}

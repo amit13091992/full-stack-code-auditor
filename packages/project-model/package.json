@@ -1,0 +1,21 @@
+{
+  "name": "@code-analyzer/project-model",
+  "version": "0.0.0",
+  "description": "Phase 1: repository discovery, file classification, and the RepositoryDiscoverer that builds a ProjectModel from a filesystem root.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@code-analyzer/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^20.14.0"
+  }
+}
