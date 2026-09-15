@@ -85,7 +85,7 @@ describe("Phase 1 end-to-end: real discovery through the full ScanEngine lifecyc
       registry,
       strategies: {
         discoverer: projectModelDiscoverer,
-        indexer: { index: async (project) => ({ project, graphs: {} }) },
+        indexer: { index: async (project) => ({ project, graphs: {}, diagnostics: [] }) },
       },
     });
 
@@ -107,7 +107,7 @@ describe("Phase 1 end-to-end: real discovery through the full ScanEngine lifecyc
       registry,
       strategies: {
         discoverer: projectModelDiscoverer,
-        indexer: { index: async (project) => ({ project, graphs: {} }) },
+        indexer: { index: async (project) => ({ project, graphs: {}, diagnostics: [] }) },
       },
     });
 

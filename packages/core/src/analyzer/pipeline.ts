@@ -3,6 +3,7 @@ import type { ProjectModel } from "../domain/project.js";
 import type { GraphAccess } from "./context.js";
 import type { Finding } from "../domain/finding.js";
 import type { Logger } from "../logging/logger.js";
+import type { Diagnostic } from "../errors/errors.js";
 
 /**
  * Pipeline stage strategies (Section 2/37D). Core defines and orchestrates these interfaces but
@@ -18,7 +19,10 @@ export interface RepositoryDiscoverer {
 
 export interface ProjectIndexer {
   /** Parses + resolves symbols and builds the graphs for a discovered project. */
-  index(project: ProjectModel, logger: Logger): Promise<{ project: ProjectModel; graphs: GraphAccess }>;
+  index(
+    project: ProjectModel,
+    logger: Logger,
+  ): Promise<{ project: ProjectModel; graphs: GraphAccess; diagnostics: readonly Diagnostic[] }>;
 }
 
 export interface FindingCorrelator {

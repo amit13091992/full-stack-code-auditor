@@ -61,7 +61,7 @@ export async function runScanCommand(args: ParsedArgs): Promise<ScanCommandResul
     registry: new InMemoryAnalyzerRegistry(),
     strategies: {
       discoverer: projectModelDiscoverer,
-      indexer: { index: async (project) => ({ project, graphs: {} }) },
+      indexer: { index: async (project) => ({ project, graphs: {}, diagnostics: [] }) },
     },
   });
 

@@ -131,6 +131,19 @@ imports — confirmed empirically, not assumed; see technical debt below.
   (`fixtures/parser/python-constructs/non-ascii.py`). test-engineer added missing coverage for
   Angular/Vue detection and the three other newly-added `CONFIG_FILENAMES` entries
   (`pyproject.toml`/`setup.cfg`/`pipfile`), none of which had any test before this review round.
+- **`ProjectIndexer` diagnostics channel** (ADR-0008, closes a gap flagged in Phase 2/3 review):
+  `ProjectIndexer.index()` now returns `diagnostics: readonly Diagnostic[]` alongside `project`/
+  `graphs`, reusing the existing `Diagnostic` type (`packages/core/src/errors/errors.ts`) rather
+  than introducing a new one. `ScanEngine.scan()` (`packages/core/src/analyzer/engine.ts`) merges
+  them into the same `diagnostics` array it already fills from analyzer results, so they reach
+  `ScanResult.diagnostics` for the first time. `parserProjectIndexer` collects each file's real
+  `ParseError`-derived `Diagnostic`s instead of only logging them, and the file-size-skip case now
+  produces a real `FILE_SKIPPED_SIZE_LIMIT` diagnostic. `graphProjectIndexer` forwards them
+  unchanged. The CLI's Phase 0 passthrough stub returns `diagnostics: []` (correct — it has nothing
+  to report). Verified end-to-end: `tests/parser/project-indexer.test.ts` proves both the size-skip
+  and a malformed file produce a real diagnostic (not just a log line), and
+  `tests/core/scan-engine.test.ts` proves an indexer's diagnostics reach `ScanResult.diagnostics`
+  through the full `ScanEngine` lifecycle.
 
 ## In-progress components
 
@@ -143,8 +156,11 @@ None.
 
 ## Known architectural decisions
 
-- See `docs/decisions/ADR-0001-monorepo-package-architecture.md` through `ADR-0009` (`ADR-0008` is
-  reserved, not yet written — the `ProjectIndexer` diagnostics-channel gap below).
+- See `docs/decisions/ADR-0001-monorepo-package-architecture.md` through `ADR-0009`.
+- `ProjectIndexer.index()` gains a required `diagnostics: readonly Diagnostic[]` field, reusing the
+  existing `Diagnostic` type rather than a new one, so parser-stage `ParseError`s and file-size
+  skips reach `ScanResult.diagnostics` for the first time instead of only `logger.debug()`:
+  ADR-0008.
 - Notably: the `Analyzer` name collision between the Section 37C rule contract and the Section 3
   facade class is resolved by naming the facade `AnalyzerClient` (ADR-0002).
 - Repository discovery implementation choices (symlinks never followed, classification priority
@@ -195,12 +211,6 @@ None.
 - No `--fail-on <severity>` CI-gating exit code on `scan` yet (deferred, cheap follow-up).
 - No `explain`/`graph`/`endpoints`/`dependencies` CLI subcommands yet — each needs data from a
   later phase (finding lookup, the graph, the endpoint/dependency models).
-- **`ProjectIndexer.index()` has no diagnostics return channel** (`packages/core/src/analyzer/
-  pipeline.ts`) — `parserProjectIndexer` can only `logger.debug()` a file's `ParseError`s (and now
-  its size-skip decisions, see below), they never reach `ScanResult.diagnostics`. Architect review
-  (see `docs/decisions/`, pending ADR-0008) recommends this land as a small core-contract change +
-  ADR at the start of Phase 3 work, before more `ProjectIndexer`-adjacent consumers exist — not a
-  blocker to Phase 2 sign-off itself.
 - **`parserProjectIndexer` now skips files over 5 MB** (`MAX_PARSEABLE_FILE_SIZE_BYTES`,
   `packages/parser/src/project-indexer.ts`) rather than parsing them — a security-review-flagged
   fix for Section 31 (repository content is hostile input; an unbounded-size file handed to
@@ -209,11 +219,11 @@ None.
   trustworthy real `fs.stat` value (not repository-content-controlled), and
   `tests/parser/project-indexer.test.ts` proves it end-to-end with a real >5MB file (generated at
   test time, not committed as a fixture) alongside a normal-sized sibling that still parses
-  correctly. The 5 MB threshold itself is still a conservative stopgap, not a tuned value — the
-  follow-up review noted two non-blocking future improvements: surfacing the skip as a visible
-  `Diagnostic` once ADR-0008 exists, and potentially making the threshold configurable via
-  `AnalyzerConfig` in a later phase, so a repo with legitimately huge but wanted source files (rare,
-  e.g. a large generated-but-unclassified data fixture) isn't silently blind-spotted forever.
+  correctly. The 5 MB threshold itself is still a conservative stopgap, not a tuned value. The skip
+  now also surfaces as a real `FILE_SKIPPED_SIZE_LIMIT` `Diagnostic` (ADR-0008) rather than only a
+  log line; making the threshold itself configurable via `AnalyzerConfig` remains a separate,
+  not-yet-scoped follow-up, so a repo with legitimately huge but wanted source files (rare, e.g. a
+  large generated-but-unclassified data fixture) isn't silently blind-spotted forever.
 - `code-analyzer scan`'s indexer is still the Phase 0 passthrough stub, not the real
   `parserProjectIndexer` (Phase 2) or `graphProjectIndexer` (Phase 3) — wiring the CLI to real
   parsing/graph-building was intentionally left out of both phases' scope (belongs to
@@ -282,9 +292,9 @@ None.
 Phase 1 (`docs/tasks/phase-1-repository-discovery.md`), the CLI & Reporting task
 (`docs/tasks/cli-and-reporting.md`, ADR-0007), Phase 2
 (`docs/tasks/phase-2-ast-semantic-model.md`, ADR-0006), Phase 3
-(`docs/tasks/phase-3-graph-foundation.md`), CommonJS support, and Angular/Vue/Python support
-(ADR-0009) are all **implemented and tested** — all pending human review before: Phase 4 (Call
-Graph) is drafted for approval, the CLI is wired into any CI/CD adapter or published to npm, the
-`ProjectIndexer` diagnostics-channel gap (ADR-0008, flagged during Phase 2 review) is decided on,
-and — if desired — Python Module Graph resolution or a third language are scoped as their own
-follow-up tasks.
+(`docs/tasks/phase-3-graph-foundation.md`), CommonJS support, Angular/Vue/Python support
+(ADR-0009), and the `ProjectIndexer` diagnostics channel (ADR-0008) are all **implemented and
+tested** — all pending human review before: Phase 4 (Call Graph) is drafted for approval, the CLI
+is wired into any CI/CD adapter or published to npm (including wiring `code-analyzer scan` to a
+real indexer), and — if desired — Python Module Graph resolution or a third language are scoped as
+their own follow-up tasks.

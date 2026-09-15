@@ -94,7 +94,12 @@ export class ScanEngine {
 
       this.checkCancelled(signal);
       events.emit({ type: "stage:started", scanId, stage: "index" });
-      const { project, graphs } = await this.strategies.indexer.index(discovered, this.logger);
+      const {
+        project,
+        graphs,
+        diagnostics: indexDiagnostics,
+      } = await this.strategies.indexer.index(discovered, this.logger);
+      diagnostics.push(...indexDiagnostics);
       events.emit({ type: "stage:completed", scanId, stage: "index", durationMs: 0 });
 
       this.checkCancelled(signal);

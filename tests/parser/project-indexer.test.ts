@@ -44,7 +44,7 @@ describe("parserProjectIndexer / oversized-file DoS mitigation (security review 
     expect(oversizedFile).toBeDefined();
     expect(oversizedFile?.sizeBytes).toBeGreaterThan(5 * 1024 * 1024);
 
-    const { project: indexed } = await parserProjectIndexer.index(project, noopLogger);
+    const { project: indexed, diagnostics } = await parserProjectIndexer.index(project, noopLogger);
 
     // The oversized file produces no Module at all — it was never handed to the parser.
     const oversizedModule = indexed.modules.find((m) => m.fileId === oversizedFile?.id);
@@ -54,5 +54,19 @@ describe("parserProjectIndexer / oversized-file DoS mitigation (security review 
     const normalModule = indexed.modules.find((m) => m.id === "normal.ts");
     expect(normalModule).toBeDefined();
     expect(indexed.functions.some((f) => f.name === "small")).toBe(true);
+
+    // ADR-0008: the skip is reported as a real Diagnostic, not just logged.
+    const skipDiagnostic = diagnostics.find((d) => d.filePath === "oversized.ts");
+    expect(skipDiagnostic).toMatchObject({ code: "FILE_SKIPPED_SIZE_LIMIT", severity: "info", source: "parser" });
+  });
+
+  it("surfaces a malformed file's ParseError as a real Diagnostic (ADR-0008), not just a logged one", async () => {
+    const malformedPath = path.join(scratchDir, "malformed.ts");
+    await fs.writeFile(malformedPath, "export function broken( {\n");
+
+    const project = await projectModelDiscoverer.discover(scratchDir, configFor(scratchDir), noopLogger);
+    const { diagnostics } = await parserProjectIndexer.index(project, noopLogger);
+
+    expect(diagnostics.some((d) => d.filePath === "malformed.ts")).toBe(true);
   });
 });

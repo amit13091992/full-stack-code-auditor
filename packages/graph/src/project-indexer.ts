@@ -1,4 +1,4 @@
-import type { GraphAccess, Logger, ProjectIndexer, ProjectModel } from "@code-analyzer/core";
+import type { Diagnostic, GraphAccess, Logger, ProjectIndexer, ProjectModel } from "@code-analyzer/core";
 import { parserProjectIndexer } from "@code-analyzer/parser";
 import { buildModuleGraph } from "./module-graph.js";
 import { buildSymbolGraph } from "./symbol-graph.js";
@@ -14,7 +14,10 @@ import { buildSymbolGraph } from "./symbol-graph.js";
  * depending on another's exported contract, only reaching into its internals (which this doesn't).
  */
 export const graphProjectIndexer: ProjectIndexer = {
-  async index(project: ProjectModel, logger: Logger): Promise<{ project: ProjectModel; graphs: GraphAccess }> {
+  async index(
+    project: ProjectModel,
+    logger: Logger,
+  ): Promise<{ project: ProjectModel; graphs: GraphAccess; diagnostics: readonly Diagnostic[] }> {
     const parsed = await parserProjectIndexer.index(project, logger);
 
     const moduleGraph = buildModuleGraph(parsed.project.modules);
@@ -30,6 +33,7 @@ export const graphProjectIndexer: ProjectIndexer = {
     return {
       project: parsed.project,
       graphs: { moduleGraph, symbolGraph },
+      diagnostics: parsed.diagnostics,
     };
   },
 };

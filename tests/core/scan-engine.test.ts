@@ -101,7 +101,7 @@ describe("AnalyzerClient / ScanEngine lifecycle", () => {
       registry,
       strategies: {
         discoverer: { discover: async () => emptyProject() },
-        indexer: { index: async (project) => ({ project, graphs: {} }) },
+        indexer: { index: async (project) => ({ project, graphs: {}, diagnostics: [] }) },
       },
     });
 
@@ -114,6 +114,40 @@ describe("AnalyzerClient / ScanEngine lifecycle", () => {
     expect(result.findings[0]?.ruleId).toBe("test/always-fires");
     expect(result.summary.totalFindings).toBe(1);
     expect(result.summary.findingsByCategory["quality"]).toBe(1);
+  });
+
+  it("merges index-stage diagnostics into ScanResult.diagnostics (ADR-0008)", async () => {
+    const registry = new InMemoryRegistry();
+    registry.register(fixtureAnalyzer);
+
+    const client = new AnalyzerClient({
+      config: testConfig(),
+      registry,
+      strategies: {
+        discoverer: { discover: async () => emptyProject() },
+        indexer: {
+          index: async (project) => ({
+            project,
+            graphs: {},
+            diagnostics: [
+              {
+                code: "FILE_SKIPPED_SIZE_LIMIT",
+                severity: "info",
+                source: "parser",
+                filePath: "big.ts",
+                message: "Skipped big.ts: exceeds the parse limit",
+              },
+            ],
+          }),
+        },
+      },
+    });
+
+    const result = await client.scan();
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "FILE_SKIPPED_SIZE_LIMIT", filePath: "big.ts" }),
+    );
   });
 
   it("skips analyzers whose supports() returns false", async () => {
@@ -129,7 +163,7 @@ describe("AnalyzerClient / ScanEngine lifecycle", () => {
       registry,
       strategies: {
         discoverer: { discover: async () => emptyProject() },
-        indexer: { index: async (project) => ({ project, graphs: {} }) },
+        indexer: { index: async (project) => ({ project, graphs: {}, diagnostics: [] }) },
       },
     });
 
@@ -147,7 +181,7 @@ describe("AnalyzerClient / ScanEngine lifecycle", () => {
       registry,
       strategies: {
         discoverer: { discover: async () => emptyProject() },
-        indexer: { index: async (project) => ({ project, graphs: {} }) },
+        indexer: { index: async (project) => ({ project, graphs: {}, diagnostics: [] }) },
         correlator: { correlate: async (findings) => findings },
         riskCalculator: {
           score: async (findings) => findings.map((f) => ({ ...f, risk: { severity: f.severity, confidence: f.confidence } })),
@@ -168,7 +202,7 @@ describe("AnalyzerClient / ScanEngine lifecycle", () => {
       registry,
       strategies: {
         discoverer: { discover: async () => emptyProject() },
-        indexer: { index: async (project) => ({ project, graphs: {} }) },
+        indexer: { index: async (project) => ({ project, graphs: {}, diagnostics: [] }) },
       },
     });
 
