@@ -3,6 +3,7 @@ import path from "node:path";
 import type { AnalyzerConfig, ScanProfile, ScanResult } from "@code-analyzer/core";
 import { AnalyzerClient } from "@code-analyzer/core";
 import { projectModelDiscoverer } from "@code-analyzer/project-model";
+import { graphProjectIndexer } from "@code-analyzer/graph";
 import type { ParsedArgs } from "../args.js";
 import { getExporter, type ExportFormat } from "../exporters/index.js";
 import { InMemoryAnalyzerRegistry } from "../registry.js";
@@ -29,9 +30,11 @@ function buildConfig(root: string, profile: ScanProfile): AnalyzerConfig {
 
 /**
  * `code-analyzer scan <root> [--profile <profile>] [--format json|sarif|html] [--out <path>]`
- * (docs/tasks/cli-and-reporting.md). Wires real Phase 1 discovery + a passthrough indexer (no
- * `ProjectIndexer` exists until Phase 2) + whatever analyzers are registered (none today —
- * `@code-analyzer/analyzers` is still an empty stub, so `findings` is legitimately empty).
+ * (docs/tasks/cli-and-reporting.md). Wires real Phase 1 discovery + `graphProjectIndexer`
+ * (Phase 3, the superset indexer — it composes Phase 2's real parsing and then builds the Module/
+ * Symbol Graph over the result, so `scan` gets both without wiring two separate indexers) +
+ * whatever analyzers are registered (none today — `@code-analyzer/analyzers` is still an empty
+ * stub, so `findings` is legitimately empty; `diagnostics` is no longer, per ADR-0008).
  */
 export async function runScanCommand(args: ParsedArgs): Promise<ScanCommandResult> {
   const root = args.positional[0];
@@ -61,7 +64,7 @@ export async function runScanCommand(args: ParsedArgs): Promise<ScanCommandResul
     registry: new InMemoryAnalyzerRegistry(),
     strategies: {
       discoverer: projectModelDiscoverer,
-      indexer: { index: async (project) => ({ project, graphs: {}, diagnostics: [] }) },
+      indexer: graphProjectIndexer,
     },
   });
 

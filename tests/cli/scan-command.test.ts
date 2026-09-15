@@ -32,6 +32,19 @@ describe("code-analyzer scan", () => {
     expect(JSON.parse(outcome.report ?? "{}").schemaVersion).toBe("0.1.0");
   });
 
+  it("runs real parsing + graph construction (graphProjectIndexer, not the old passthrough stub)", async () => {
+    await fs.writeFile(path.join(scratchDir, "package.json"), JSON.stringify({ name: "scan-wiring-fixture", version: "1.0.0" }));
+    await fs.writeFile(path.join(scratchDir, "good.ts"), "export function ok() {\n  return 1;\n}\n");
+    await fs.writeFile(path.join(scratchDir, "bad.ts"), "export function broken( {\n");
+
+    const outcome = await runScanCommand(parseArgs(["scan", scratchDir, "--format", "json"]));
+
+    expect(outcome.exitCode).toBe(0);
+    // A real ParseError on bad.ts only reaches ScanResult.diagnostics (ADR-0008) if the real
+    // parserProjectIndexer ran — the old passthrough stub always returned `diagnostics: []`.
+    expect(outcome.result?.diagnostics.some((d) => d.filePath === "bad.ts")).toBe(true);
+  });
+
   it("writes the report to --out in each supported format", async () => {
     const root = path.join(FIXTURES_ROOT, "generated-code");
 

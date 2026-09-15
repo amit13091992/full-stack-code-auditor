@@ -55,6 +55,9 @@ importers:
       '@code-analyzer/core':
         specifier: workspace:*
         version: link:../core
+      '@code-analyzer/graph':
+        specifier: workspace:*
+        version: link:../graph
       '@code-analyzer/project-model':
         specifier: workspace:*
         version: link:../project-model

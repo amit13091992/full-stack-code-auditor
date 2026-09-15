@@ -60,9 +60,19 @@ imports — confirmed empirically, not assumed; see technical debt below.
   <root>` (real Phase 1 discovery → whatever analyzers are registered, zero today) and
   `code-analyzer export` (re-format a prior `ScanResult`) commands with a hand-rolled argument
   parser (`src/args.ts`) and a `bin` entry point (`src/bin.ts`); an `InMemoryAnalyzerRegistry`
-  wiring helper. 17 tests across `tests/cli/` (exporters incl. an HTML-injection-escaping test,
+  wiring helper. 18 tests across `tests/cli/` (exporters incl. an HTML-injection-escaping test,
   scan/export command success and failure paths, argument parsing). Manually verified against the
   built `dist/bin.js` running real scans over `fixtures/project-model/`.
+- **`code-analyzer scan` wired to the real indexer** (small follow-up, post-Phase-3): `scan.ts` now
+  passes `graphProjectIndexer` (`@code-analyzer/graph`) as its `ProjectIndexer` strategy instead of
+  the Phase 0 passthrough stub (`{ project, graphs: {}, diagnostics: [] }`) — `scan` now runs real
+  Phase 2 parsing and Phase 3 Module/Symbol Graph construction, not just discovery, and real parse
+  diagnostics (ADR-0008) reach the CLI's JSON/SARIF/HTML reports. `@code-analyzer/cli` gained a
+  `@code-analyzer/graph` dependency and tsconfig project reference (no cycle: `graph` doesn't depend
+  on `cli`). `findings` is still legitimately empty (no analyzers registered — unrelated, tracked
+  separately below). Verified with a new `tests/cli/scan-command.test.ts` case asserting a real
+  syntax error in a scanned file surfaces in `ScanResult.diagnostics` — something the old stub could
+  never produce — plus manual verification against the built `dist/bin.js`.
 - `@code-analyzer/parser` (Phase 2, ADR-0006): `parseFile` — per-file TypeScript Compiler API
   parsing (`allowJs: true`, both `.js`/`.jsx` and `.ts`/`.tsx`) into `Module`/`Symbol`/
   `FunctionEntity`/`ClassEntity`/`ImportBinding`/`ExportBinding`, with deterministic
@@ -205,7 +215,9 @@ None.
 - Discovery does not yet populate `ProjectModel.dependencies` (Section 13's `Dependency[]`) —
   deliberately deferred per ADR-0005 until vulnerability/reachability data sources exist.
 - `code-analyzer scan` legitimately produces zero findings today — `@code-analyzer/analyzers` has
-  no analyzers registered yet (intentional per `docs/tasks/cli-and-reporting.md` Non-goals).
+  no analyzers registered yet (intentional per `docs/tasks/cli-and-reporting.md` Non-goals). It now
+  runs real parsing/graph-building (`graphProjectIndexer`, see Completed components below), so this
+  is purely "no analyzers registered," not "no real indexing happened."
 - SARIF export is verified by structural assertions against the fields we emit, not full SARIF
   2.1.0 schema validation (ADR-0007) — strengthen before relying on it in a real CI/CD adapter.
 - No `--fail-on <severity>` CI-gating exit code on `scan` yet (deferred, cheap follow-up).
@@ -224,11 +236,6 @@ None.
   log line; making the threshold itself configurable via `AnalyzerConfig` remains a separate,
   not-yet-scoped follow-up, so a repo with legitimately huge but wanted source files (rare, e.g. a
   large generated-but-unclassified data fixture) isn't silently blind-spotted forever.
-- `code-analyzer scan`'s indexer is still the Phase 0 passthrough stub, not the real
-  `parserProjectIndexer` (Phase 2) or `graphProjectIndexer` (Phase 3) — wiring the CLI to real
-  parsing/graph-building was intentionally left out of both phases' scope (belongs to
-  `docs/tasks/cli-and-reporting.md` instead); natural small follow-up, now with two real indexers
-  to choose from.
 - `ClassEntity.extendsSymbolId`/`.implementsSymbolIds` (Phase 2, carried into the Symbol Graph's
   `EXTENDS`/`IMPLEMENTS` edges by Phase 3) still only resolve when the base class/interface is
   declared in the *same file* — Phase 3 resolved **import** cross-file references (the Module
@@ -293,8 +300,8 @@ Phase 1 (`docs/tasks/phase-1-repository-discovery.md`), the CLI & Reporting task
 (`docs/tasks/cli-and-reporting.md`, ADR-0007), Phase 2
 (`docs/tasks/phase-2-ast-semantic-model.md`, ADR-0006), Phase 3
 (`docs/tasks/phase-3-graph-foundation.md`), CommonJS support, Angular/Vue/Python support
-(ADR-0009), and the `ProjectIndexer` diagnostics channel (ADR-0008) are all **implemented and
-tested** — all pending human review before: Phase 4 (Call Graph) is drafted for approval, the CLI
-is wired into any CI/CD adapter or published to npm (including wiring `code-analyzer scan` to a
-real indexer), and — if desired — Python Module Graph resolution or a third language are scoped as
-their own follow-up tasks.
+(ADR-0009), the `ProjectIndexer` diagnostics channel (ADR-0008), and wiring `code-analyzer scan` to
+the real `graphProjectIndexer` are all **implemented and tested** — all pending human review
+before: Phase 4 (Call Graph) is drafted for approval, the CLI is wired into any CI/CD adapter or
+published to npm, and — if desired — Python Module Graph resolution or a third language are scoped
+as their own follow-up tasks.
