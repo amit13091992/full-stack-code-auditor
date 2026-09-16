@@ -168,10 +168,44 @@ imports — confirmed empirically, not assumed; see technical debt below.
   `tests/core/scan-engine.test.ts` proves an indexer's diagnostics reach `ScanResult.diagnostics`
   through the full `ScanEngine` lifecycle.
 
+- **`@code-analyzer/analyzers` — first real analyzers** (`docs/tasks/first-graph-analyzers.md`,
+  quick win parallel to Phase 4 scoping, no core contract change, no ADR): three `Analyzer`
+  implementations built only on `AnalyzerContext.graphs.moduleGraph` and Phase 1-2 data —
+  `architecture/circular-import` (walks `IMPORTS` edges per module, using `graph.findPaths` to find
+  a path back to the start node, plus a direct check for a module importing itself; dedupes cycles
+  by the sorted set of participating module IDs so each distinct cycle is reported once, severity
+  `medium`, confidence `0.9` — deterministic structural fact over resolved edges, not a heuristic),
+  `architecture/unresolved-import` (flags an `ImportBinding` with a relative (`./`/`../`) specifier
+  that doesn't resolve to any project module — reusing the Module Graph's own relative-resolution
+  algorithm locally since the graph doesn't retain which binding produced which edge; a bare
+  specifier like `"react"` is never flagged, since the Module Graph doesn't resolve `node_modules`
+  by design; severity `medium`, confidence `0.85`), and `quality/unused-export` (flags a module with
+  at least one exported `Symbol`/`FunctionEntity`/`ClassEntity` and zero incoming `IMPORTS` edges
+  project-wide — module-level only, deliberately can't say which specific export is unused since
+  that needs `REFERENCES` edges, Phase 4+; `index.*` files are excluded as likely entry points,
+  `package.json` `main`/`module`-based exclusion is a documented known limitation since
+  `ProjectModel` doesn't capture that field today; severity `low`, confidence `0.35` — noticeably
+  lower than the other two, reflecting how much weaker this signal is). All three: category per the
+  task spec (`architecture`/`architecture`/`quality`), `requiresGraphs: ["moduleGraph"]`,
+  `status: "detected"` (static-only, never `"confirmed"`), every `Finding` backed by real `Evidence`
+  with an honest `SourceLocation` pointing at the actual import/export statement — discovered
+  empirically during implementation that `Module.exports` (`ExportBinding[]`) only covers explicit
+  `export { x }`/`export default`/re-export forms, not inline `export function`/`export class`
+  declarations, so `quality/unused-export` reads `Symbol.exported`/`FunctionEntity.isExported`/
+  `ClassEntity.isExported` directly instead, matching the task doc's actual wording. Registered via
+  `registerBuiltinAnalyzers(registry)` (`packages/analyzers/src/index.ts`) — never wired into
+  `packages/cli`, per the analyzer-development skill; that remains a separate, not-yet-made
+  decision. Fixtures under `fixtures/architecture/circular-import/`,
+  `fixtures/architecture/unresolved-import/`, `fixtures/quality/unused-export/`, each with a
+  `positive/` and `false-positive/` case (`unresolved-import`'s cases include a bare `"react"`/
+  `"express"` specifier that must not fire). 10 new tests across `tests/analyzers/` (2 unit tests per
+  analyzer plus a 2-test real end-to-end suite wiring all three through a real `AnalyzerRegistry` and
+  `AnalyzerClient` after real Phase 1-3 discovery/parsing/graph-building).
+
 ## In-progress components
 
-None — Phase 1, the CLI & Reporting task, Phase 2, Phase 3, CommonJS support, and Angular/Vue/
-Python support are all complete, pending human review.
+None — Phase 1, the CLI & Reporting task, Phase 2, Phase 3, CommonJS support, Angular/Vue/Python
+support, and the first `@code-analyzer/analyzers` analyzers are all complete, pending human review.
 
 ## Blocked components
 
@@ -209,9 +243,9 @@ None.
 
 ## Known technical debt
 
-- Stub packages (`analyzers`, `engines`, `integrations`, `ai`, `plugins`) still contain only
-  `package.json` + empty `src/index.ts` — intentional, gated on their own phase. (`parser`, `graph`,
-  and `cli` are no longer stubs.)
+- Stub packages (`engines`, `integrations`, `ai`, `plugins`) still contain only `package.json` +
+  empty `src/index.ts` — intentional, gated on their own phase. (`parser`, `graph`, `cli`, and now
+  `analyzers` are no longer stubs.)
 - **Non-JS/TS languages have no semantic model at all** — only `javascript`/`typescript`/`json`/
   `yaml`/`sql`/`dockerfile` are recognized `LanguageId`s (Section 5's initial scope). A Python-,
   Go-, Java-, Ruby-, or Rust-based repository (most AI/ML codebases included) gets basic file
