@@ -1,6 +1,17 @@
 import type { EdgeId, EdgeRelationType, Graph, GraphEdge, GraphNode, GraphQuery, NodeId, PathResult } from "@code-analyzer/core";
 
 /**
+ * `findPaths` explores every shortest path, not just one — without a bound, a densely-connected
+ * graph (a malicious or pathological repository is untrusted input, Section 31) can make it
+ * enqueue exponentially many partial paths before a single frame is dequeued past this limit. This
+ * is a conservative stopgap bound, not a tuned value — same reasoning as
+ * `MAX_PARSEABLE_FILE_SIZE_BYTES` (`packages/parser/src/project-indexer.ts`): close the DoS vector
+ * now rather than wait for a Phase 4+ analyzer to pick a number, and revisit with real
+ * large-repository profiling data once one exists.
+ */
+const MAX_FIND_PATHS_FRAMES_EXPANDED = 50_000;
+
+/**
  * The concrete `Graph` implementation (ADR-0003: in-process, not a graph database). An
  * adjacency-list structure — `outgoing`/`incoming` map a `NodeId` to the `EdgeId`s leaving/
  * entering it, so `neighbors()` and `findPaths()` don't need to scan every edge.
@@ -77,6 +88,13 @@ export class InMemoryGraph<TNodeData = unknown, TEdgeData = unknown> implements 
    * Breadth-first search, returning every shortest path (there may be more than one of equal
    * length) up to `maxDepth` hops. No weighted-edge concept exists yet (Phase 3 scope), so "shortest"
    * means fewest edges.
+   *
+   * Bounded by `MAX_FIND_PATHS_FRAMES_EXPANDED` (security stopgap, see above): once that many
+   * partial paths have been dequeued, the search stops and returns whatever shortest paths it has
+   * already found rather than continuing to explore. On a graph this dense that bound is a signal
+   * something is wrong with the input, not a real "no path exists" answer — callers should not
+   * treat an empty/partial result as proof of unreachability without also checking `nodeCount`/
+   * `edgeCount` for a graph size that's plausible for the bound to have engaged.
    */
   findPaths(fromNodeId: NodeId, toNodeId: NodeId, maxDepth = 10): readonly PathResult[] {
     if (!this.nodes.has(fromNodeId) || !this.nodes.has(toNodeId)) return [];
@@ -84,17 +102,26 @@ export class InMemoryGraph<TNodeData = unknown, TEdgeData = unknown> implements 
 
     type Frame = { nodeId: NodeId; nodes: GraphNode<TNodeData>[]; edges: GraphEdge<TEdgeData>[] };
     const startNode = this.nodes.get(fromNodeId)!;
+    // Index-based queue (not Array.shift(), which is O(n)) — with the frame cap below the queue
+    // can still grow to tens of thousands of entries on a dense graph, and shift()ing off a
+    // large array turns the whole search O(n^2).
     const queue: Frame[] = [{ nodeId: fromNodeId, nodes: [startNode], edges: [] }];
+    let queueHead = 0;
     const results: PathResult[] = [];
     let shortestLength: number | undefined;
+    let framesExpanded = 0;
+    let framesEnqueued = 1;
 
-    while (queue.length > 0) {
-      const current = queue.shift()!;
+    while (queueHead < queue.length) {
+      if (framesExpanded >= MAX_FIND_PATHS_FRAMES_EXPANDED) break;
+      const current = queue[queueHead++]!;
+      framesExpanded++;
       if (current.edges.length >= maxDepth) continue;
       if (shortestLength !== undefined && current.edges.length >= shortestLength) continue;
 
       const outgoingEdgeIds = this.outgoing.get(current.nodeId) ?? new Set<EdgeId>();
       for (const edgeId of outgoingEdgeIds) {
+        if (framesEnqueued >= MAX_FIND_PATHS_FRAMES_EXPANDED) break;
         const edge = this.edges.get(edgeId);
         if (!edge) continue;
         // Avoid cycles within a single path (Section 16 needs cycle handling, not infinite loops).
@@ -109,6 +136,7 @@ export class InMemoryGraph<TNodeData = unknown, TEdgeData = unknown> implements 
           results.push({ nodes: nextFrame.nodes, edges: nextFrame.edges });
         } else {
           queue.push(nextFrame);
+          framesEnqueued++;
         }
       }
     }

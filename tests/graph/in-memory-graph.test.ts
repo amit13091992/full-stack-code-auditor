@@ -106,4 +106,45 @@ describe("InMemoryGraph", () => {
     expect(graph.findPaths("a" as NodeId, "b" as NodeId)).toEqual([]);
     expect(graph.findPaths("a" as NodeId, "missing" as NodeId)).toEqual([]);
   });
+
+  it("findPaths() terminates quickly on a densely-connected graph instead of exploring exponentially many paths (security stopgap bound)", () => {
+    // A layered fully-bipartite-connected graph: each of `width` nodes in layer i connects to
+    // every node in layer i+1. The number of distinct partial paths grows as width^layer, so a
+    // small, cheap-to-build graph (44 nodes here) still produces hundreds of thousands of BFS
+    // frames if nothing bounds the search — exactly the DoS shape a dense/malicious repository
+    // graph could produce. The target is unreachable, so nothing ever short-circuits the search
+    // early via a found result; without the frame cap this would keep expanding until it visited
+    // every one of width^layers partial paths.
+    const graph = new InMemoryGraph();
+    const width = 6;
+    const layers = 7;
+    graph.addNode(node("start"));
+    graph.addNode(node("unreachable-target"));
+
+    let previousLayerIds: string[] = ["start"];
+    for (let layer = 0; layer < layers; layer++) {
+      const layerIds: string[] = [];
+      for (let i = 0; i < width; i++) {
+        const id = `l${layer}n${i}`;
+        layerIds.push(id);
+        graph.addNode(node(id));
+      }
+      for (const fromId of previousLayerIds) {
+        for (const toId of layerIds) {
+          graph.addEdge(edge(`${fromId}->${toId}`, "IMPORTS", fromId, toId));
+        }
+      }
+      previousLayerIds = layerIds;
+    }
+
+    const start = Date.now();
+    const paths = graph.findPaths("start" as NodeId, "unreachable-target" as NodeId, layers + 1);
+    const elapsedMs = Date.now() - start;
+
+    expect(paths).toEqual([]);
+    // A generous ceiling: the frame cap bounds work to a small constant regardless of how
+    // explosive the graph is, so this stays fast even though width^layers (6^7 ≈ 280,000) partial
+    // paths exist in principle.
+    expect(elapsedMs).toBeLessThan(2000);
+  });
 });

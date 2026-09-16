@@ -73,6 +73,19 @@ imports — confirmed empirically, not assumed; see technical debt below.
   separately below). Verified with a new `tests/cli/scan-command.test.ts` case asserting a real
   syntax error in a scanned file surfaces in `ScanResult.diagnostics` — something the old stub could
   never produce — plus manual verification against the built `dist/bin.js`.
+- **`InMemoryGraph.findPaths` size/branching bound** (security-review follow-up, closes the gap
+  flagged during Phase 3 review): a `MAX_FIND_PATHS_FRAMES_EXPANDED = 50_000` stopgap constant
+  (`packages/graph/src/in-memory-graph.ts`, same "conservative stopgap, not a tuned value"
+  reasoning as `MAX_PARSEABLE_FILE_SIZE_BYTES`) bounds both frames dequeued and frames enqueued, so
+  a densely-connected/pathological graph can no longer make `findPaths` do unbounded work — it
+  stops and returns whatever shortest paths were already found. Fixing this also exposed and fixed
+  a real O(n²) performance bug: the BFS queue used `Array.shift()` (O(n) per dequeue), which made a
+  large queue quadratic; replaced with an index-based queue (O(1) amortized dequeue). No
+  `Graph`/`findPaths()` signature change — this is an internal implementation bound, not a Section
+  37C contract change, so no ADR was needed. Verified with a new regression test
+  (`tests/graph/in-memory-graph.test.ts`) building a 44-node layered fully-bipartite graph where an
+  unbounded search would need to expand ~6^7 (~280,000) partial paths to prove unreachability — it
+  now returns in well under a second instead of hanging or exhausting memory.
 - `@code-analyzer/parser` (Phase 2, ADR-0006): `parseFile` — per-file TypeScript Compiler API
   parsing (`allowJs: true`, both `.js`/`.jsx` and `.ts`/`.tsx`) into `Module`/`Symbol`/
   `FunctionEntity`/`ClassEntity`/`ImportBinding`/`ExportBinding`, with deterministic
@@ -256,13 +269,6 @@ None.
   `ProjectModel.dependencies` doesn't exist yet (ADR-0005).
 - No graph persistence/serialization for incremental-analysis caching (Section 29) — `InMemoryGraph`
   is rebuilt from scratch on every scan; still deferred, same as Phase 1/2's caching gaps.
-- **`InMemoryGraph.findPaths` has no size/branching bound** (security-review flagged, not fixed —
-  currently unreachable: nothing calls `findPaths` yet, only `addNode`/`addEdge`/`getEdge` via the
-  Module/Symbol Graph builders). A densely-connected malicious repository could make a future
-  `findPaths` call over an untrusted-repo-derived graph expensive in time and memory. Track this:
-  add an explicit node/edge/queue-size cap (or a documented max on `nodeCount`/`edgeCount`) before
-  any Phase 4+ analyzer actually calls `findPaths` — the right bound is that analyzer's call to
-  make, not something to guess at speculatively now (Section 4/35.7).
 - **Python Module Graph resolution doesn't exist** — `buildModuleGraph` produces zero `IMPORTS`
   edges over Python `import`/`from ... import ...` statements (confirmed empirically). Python's
   dotted-module specifiers, `__init__.py` package roots, and `sys.path`-based absolute-import
