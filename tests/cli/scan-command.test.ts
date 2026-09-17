@@ -20,16 +20,29 @@ afterEach(async () => {
 });
 
 describe("code-analyzer scan", () => {
-  it("runs real discovery end-to-end and reports zero findings (no analyzers registered yet)", async () => {
+  it("runs real discovery end-to-end against a clean fixture with none of the built-in analyzers' issues", async () => {
     const root = path.join(FIXTURES_ROOT, "node-express");
     const outcome = await runScanCommand(parseArgs(["scan", root, "--format", "json"]));
 
     expect(outcome.exitCode).toBe(0);
     expect(outcome.result?.scan.status).toBe("completed");
     expect(outcome.result?.summary.filesAnalyzed).toBeGreaterThan(0);
+    // Zero findings here reflects this fixture being clean, not analyzers being unregistered —
+    // see the next test for proof the built-in analyzers actually run.
     expect(outcome.result?.findings).toHaveLength(0);
     expect(outcome.report).toBeDefined();
     expect(JSON.parse(outcome.report ?? "{}").schemaVersion).toBe("0.1.0");
+  });
+
+  it("registers the built-in analyzers and reports a real finding on a fixture with an actual issue", async () => {
+    const root = path.join(__dirname, "../../fixtures/architecture/circular-import/positive");
+    const outcome = await runScanCommand(parseArgs(["scan", root, "--format", "json"]));
+
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.result?.scan.analyzersRun).toEqual(
+      expect.arrayContaining(["architecture/circular-import", "architecture/unresolved-import", "quality/unused-export"]),
+    );
+    expect(outcome.result?.findings.some((f) => f.ruleId === "architecture/circular-import")).toBe(true);
   });
 
   it("runs real parsing + graph construction (graphProjectIndexer, not the old passthrough stub)", async () => {

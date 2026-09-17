@@ -192,15 +192,27 @@ imports — confirmed empirically, not assumed; see technical debt below.
   empirically during implementation that `Module.exports` (`ExportBinding[]`) only covers explicit
   `export { x }`/`export default`/re-export forms, not inline `export function`/`export class`
   declarations, so `quality/unused-export` reads `Symbol.exported`/`FunctionEntity.isExported`/
-  `ClassEntity.isExported` directly instead, matching the task doc's actual wording. Registered via
-  `registerBuiltinAnalyzers(registry)` (`packages/analyzers/src/index.ts`) — never wired into
-  `packages/cli`, per the analyzer-development skill; that remains a separate, not-yet-made
-  decision. Fixtures under `fixtures/architecture/circular-import/`,
-  `fixtures/architecture/unresolved-import/`, `fixtures/quality/unused-export/`, each with a
-  `positive/` and `false-positive/` case (`unresolved-import`'s cases include a bare `"react"`/
-  `"express"` specifier that must not fire). 10 new tests across `tests/analyzers/` (2 unit tests per
-  analyzer plus a 2-test real end-to-end suite wiring all three through a real `AnalyzerRegistry` and
-  `AnalyzerClient` after real Phase 1-3 discovery/parsing/graph-building).
+  `ClassEntity.isExported` directly instead, matching the task doc's actual wording. Fixtures under
+  `fixtures/architecture/circular-import/`, `fixtures/architecture/unresolved-import/`,
+  `fixtures/quality/unused-export/`, each with a `positive/` and `false-positive/` case
+  (`unresolved-import`'s cases include a bare `"react"`/`"express"` specifier that must not fire).
+  10 new tests across `tests/analyzers/` (2 unit tests per analyzer plus a 2-test real end-to-end
+  suite wiring all three through a real `AnalyzerRegistry` and `AnalyzerClient` after real Phase
+  1-3 discovery/parsing/graph-building).
+- **`code-analyzer scan` registers the built-in analyzers** (small follow-up, closes the loop on the
+  entry above): `scan.ts` now calls `registerBuiltinAnalyzers(registry)`
+  (`@code-analyzer/analyzers`, `packages/analyzers/src/index.ts`) against its own
+  `InMemoryAnalyzerRegistry` before running `AnalyzerClient.scan()` — `scan` no longer always
+  reports zero findings; it runs `architecture/circular-import`, `architecture/unresolved-import`,
+  and `quality/unused-export` against every scanned repository. This is the CLI *depending on and
+  registering* the analyzers package (mirroring how it already depends on `@code-analyzer/graph`),
+  not an analyzer wiring itself into the CLI — consistent with the analyzer-development skill's
+  registry-based integration pattern. `@code-analyzer/cli` gained an `@code-analyzer/analyzers`
+  dependency and tsconfig project reference. Verified with a new `tests/cli/scan-command.test.ts`
+  case asserting all three analyzer IDs appear in `scan.analyzersRun` and a real circular-import
+  finding is reported for a fixture that has one; the existing "zero findings" test was re-labeled
+  (it now documents "this specific fixture is clean," not "no analyzers are registered") rather than
+  removed, since it's still valid coverage. Manually verified against the built `dist/bin.js`.
 
 ## In-progress components
 
@@ -261,10 +273,6 @@ None.
   for `packages/ai` once deterministic analyzers exist to feed it (Section 24).
 - Discovery does not yet populate `ProjectModel.dependencies` (Section 13's `Dependency[]`) —
   deliberately deferred per ADR-0005 until vulnerability/reachability data sources exist.
-- `code-analyzer scan` legitimately produces zero findings today — `@code-analyzer/analyzers` has
-  no analyzers registered yet (intentional per `docs/tasks/cli-and-reporting.md` Non-goals). It now
-  runs real parsing/graph-building (`graphProjectIndexer`, see Completed components below), so this
-  is purely "no analyzers registered," not "no real indexing happened."
 - SARIF export is verified by structural assertions against the fields we emit, not full SARIF
   2.1.0 schema validation (ADR-0007) — strengthen before relying on it in a real CI/CD adapter.
 - No `--fail-on <severity>` CI-gating exit code on `scan` yet (deferred, cheap follow-up).
@@ -340,8 +348,10 @@ Phase 1 (`docs/tasks/phase-1-repository-discovery.md`), the CLI & Reporting task
 (`docs/tasks/cli-and-reporting.md`, ADR-0007), Phase 2
 (`docs/tasks/phase-2-ast-semantic-model.md`, ADR-0006), Phase 3
 (`docs/tasks/phase-3-graph-foundation.md`), CommonJS support, Angular/Vue/Python support
-(ADR-0009), the `ProjectIndexer` diagnostics channel (ADR-0008), and wiring `code-analyzer scan` to
-the real `graphProjectIndexer` are all **implemented and tested** — all pending human review
-before: Phase 4 (Call Graph) is drafted for approval, the CLI is wired into any CI/CD adapter or
+(ADR-0009), the `ProjectIndexer` diagnostics channel (ADR-0008), wiring `code-analyzer scan` to the
+real `graphProjectIndexer`, the first `@code-analyzer/analyzers` rules
+(`docs/tasks/first-graph-analyzers.md`), and registering them against `scan`'s own registry are all
+**implemented and tested** — all pending human review before: Phase 4 (Call Graph) is drafted for
+approval, the CLI is wired into any CI/CD adapter or
 published to npm, and — if desired — Python Module Graph resolution or a third language are scoped
 as their own follow-up tasks.
