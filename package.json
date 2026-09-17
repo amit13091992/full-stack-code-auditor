@@ -1,6 +1,6 @@
 {
   "name": "codegraph-scan",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Application-aware full-stack codebase analyzer (Phase 0: foundation & contracts)",
   "license": "MIT",
