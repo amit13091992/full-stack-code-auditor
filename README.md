@@ -1,4 +1,4 @@
-# code-analyzer
+# codegraph-scan
 
 **An application-aware codebase analyzer — not a linter.** Instead of matching patterns file by
 file, it builds a real model of your repository first (files, symbols, import graphs, and
@@ -16,30 +16,22 @@ and explaining findings later, never the thing doing the actual detection.
 
 ## Where things stand
 
-**Phase 3 — Graph Foundation**, plus a working CLI. In plain terms: the engine can already walk a
-real repository, parse every JS/TS file, and build a graph of which files import which — the
-groundwork every future analysis rule will sit on top of. What it *can't* do yet is flag real
-issues (security bugs, architecture violations, etc.) — that's still ahead, once the graph work
-(call graphs, data flow) and the actual rule engines are built.
+**Phase 3 — Graph Foundation**, complete and reviewed, plus a working CLI with its first three
+real analyzers wired in. Concretely, today `codegraph-scan scan <repo>` will:
 
-Concretely, today:
+1. Walk the repository, classify every file, and detect the package manager, workspace layout,
+   and frameworks (React, React Native, Angular, Vue, Node.js, Express, NestJS, Next.js).
+2. Parse every JS/TS file with the real TypeScript compiler (ESM and CommonJS) into functions,
+   classes, imports, and exports; parse Python with Tree-sitter into the same shapes.
+3. Build a Module Graph (cross-file `IMPORTS` resolution) and a Symbol Graph
+   (`DECLARES`/`EXTENDS`/`IMPLEMENTS`) over the parsed output.
+4. Run three built-in analyzers over that graph — **circular-import**, **unresolved-import**, and
+   **unused-export** — and emit real `Finding`s.
+5. Report the result as JSON, SARIF, or HTML.
 
-- **Discovery** (Phase 1) — walks a repo, classifies every file, detects the package manager,
-  workspace layout, and frameworks (React, Express, NestJS, Next.js, ...).
-- **Parsing** (Phase 2) — parses every JS/TS file into functions, classes, imports, and exports
-  using the real TypeScript compiler, not regex. Understands both ES modules and CommonJS
-  (`require()`/`module.exports`), so genuinely legacy Node.js code works too.
-- **Python** — a second language, parsed with Tree-sitter (functions, classes, imports). Same
-  Symbol Graph support as JS/TS; cross-file import linking for Python isn't built yet (see
-  `docs/project-status.md`).
-- **Graphs** (Phase 3, this round) — links files together by their imports, and links classes to
-  what they extend/implement, into a real queryable graph.
-- **Reporting** — `code-analyzer scan <repo>` runs real discovery and produces a JSON, SARIF, or
-  HTML report — though the findings list is empty for now, since no rule engine exists yet
-  (see [ADR-0007](docs/decisions/ADR-0007-cli-reporting-exporters.md)). Parsing and graph-building
-  aren't wired into the CLI yet (see `docs/project-status.md`'s technical debt); think of `scan`
-  today as proof the discovery → report pipeline works end-to-end, with parsing, graphs, and actual
-  detections still to come.
+What it *can't* do yet: call graphs, data-flow/taint graphs, security/architecture rules beyond
+the three above, and Python cross-file import resolution (Python parses per-file but doesn't yet
+link `import`s across files — see `docs/project-status.md`'s technical debt).
 
 Every phase gets signed off by a human before the next one starts — see
 [`docs/project-status.md`](docs/project-status.md) for the exact, up-to-date state, what's been
@@ -52,13 +44,13 @@ reviewed, and what's next.
 | `@code-analyzer/core` | Domain model, contracts, and the `ScanEngine` lifecycle. Zero dependencies on other workspace packages, no analysis logic. |
 | `@code-analyzer/project-model` | Repository discovery -> normalized `ProjectModel` (Phase 1, implemented). |
 | `@code-analyzer/parser` | AST / semantic source model — TypeScript Compiler API for JS/TS incl. CommonJS (ADR-0006), Tree-sitter for Python (ADR-0009). Implemented. |
-| `@code-analyzer/graph` | Module Graph + Symbol Graph (Phase 3, implemented); call graph and taint graph land in Phase 4/5. |
-| `@code-analyzer/analyzers` | Individual analysis rules (security, architecture, quality, performance, dependency, secrets, infrastructure) — not started yet. |
+| `@code-analyzer/graph` | Module Graph + Symbol Graph, wired into a real `graphProjectIndexer` (Phase 3, implemented); call graph and taint graph land in Phase 4/5. |
+| `@code-analyzer/analyzers` | Analysis rules. Ships three today: circular-import, unresolved-import, unused-export. Security/architecture/quality/performance/dependency/secrets/infrastructure rules not started yet. |
 | `@code-analyzer/engines` | Engine-level composition, finding correlation, risk scoring — not started yet. |
 | `@code-analyzer/integrations` | External tool normalization (SARIF, CodeQL, Semgrep, ...) and CI/CD adapters — not started yet. |
 | `@code-analyzer/ai` | Optional AI investigation/remediation layer — not started yet. |
 | `@code-analyzer/plugins` | Plugin host/loader runtime — not started yet. |
-| `@code-analyzer/cli` | `scan`/`export` commands plus JSON/SARIF/HTML report exporters — no analysis logic of its own. Implemented. |
+| `@code-analyzer/cli` | `scan`/`export` commands, the three built-in analyzers wired against an in-memory registry, plus JSON/SARIF/HTML report exporters. Implemented. |
 
 `packages/core` is the only package every other package depends on; it never depends back on them
 — that's what keeps the CLI, a future IDE extension, and a future dashboard all sharing one real
@@ -67,17 +59,49 @@ for the reasoning.
 
 ## Supported languages / frameworks
 
-**Fully parsed** (real Symbol Graph support): JavaScript, TypeScript (incl. CommonJS). **Fully
-parsed, single-file only** (no cross-file import linking yet): Python. **Recognized but not
-parsed** (file-tagging only): JSON, YAML, SQL, Dockerfile. **Not recognized at all**: everything
-else (C#, PHP, Java, Go, Ruby, Rust, ...) — see [ADR-0009](docs/decisions/ADR-0009-angular-vue-python-support.md)
-for what adding a language actually takes.
+**Fully parsed** (real Symbol Graph + Module Graph support): JavaScript, TypeScript (incl.
+CommonJS). **Fully parsed, single-file only** (no cross-file import linking yet): Python.
+**Recognized but not parsed** (file-tagging only): JSON, YAML, SQL, Dockerfile. **Not recognized at
+all**: everything else (C#, PHP, Java, Go, Ruby, Rust, ...) — see
+[ADR-0009](docs/decisions/ADR-0009-angular-vue-python-support.md) for what adding a language
+actually takes.
 
 Frameworks detected: React, React Native, Angular, Vue, Node.js, Express, NestJS, Next.js.
 
-## Getting started
+Works against a single repository or a monorepo (pnpm/npm/yarn workspaces are detected during
+discovery).
+
+## Installation
 
 ```bash
+npm install -g codegraph-scan
+```
+
+Or run it without installing:
+
+```bash
+npx codegraph-scan scan <path-to-a-repo>
+```
+
+## Usage
+
+```bash
+codegraph-scan scan <path-to-a-repo> --format json            # or sarif / html
+codegraph-scan scan <path-to-a-repo> --format html --out report.html
+codegraph-scan scan <path-to-a-repo> --profile standard --format sarif --out report.sarif
+codegraph-scan export --format sarif --in report.json --out report.sarif
+```
+
+`scan` runs real discovery, parsing, and graph-building against whatever repo you point it at, runs
+the three built-in analyzers over the resulting graph, and produces a schema-versioned
+`ScanResult`. `--profile` accepts `minimal` (default), `standard`, `security`, `full`, or
+`enterprise`; `--format` accepts `json` (default), `sarif`, or `html`.
+
+## Developing this repo
+
+```bash
+git clone <this-repo>
+cd codegraph-scan
 pnpm install
 pnpm build        # tsc -b across all packages
 pnpm typecheck
@@ -85,20 +109,11 @@ pnpm test          # vitest run
 pnpm lint
 ```
 
-## Running a scan
+Run the CLI from source without installing the published package:
 
 ```bash
-node packages/cli/dist/bin.js scan <path-to-a-repo> --format json   # or sarif / html
-node packages/cli/dist/bin.js scan <path-to-a-repo> --format html --out report.html
-node packages/cli/dist/bin.js export --format sarif --in report.json --out report.sarif
+node packages/cli/dist/bin.js scan <path-to-a-repo> --format json
 ```
-
-`scan` runs real discovery against whatever repo you point it at and produces a schema-versioned
-`ScanResult`. It doesn't yet run the real Phase 2 parser or Phase 3 graph-builders — its indexer is
-still a passthrough stub (see `docs/project-status.md`'s technical debt) — and its `findings` list is
-empty until a real `Analyzer` is registered in `@code-analyzer/analyzers`. This is deliberate: it
-proves the discover → report pipeline works end-to-end before parsing, graphs, and detection logic
-are wired in on top of it.
 
 ## Contributing
 

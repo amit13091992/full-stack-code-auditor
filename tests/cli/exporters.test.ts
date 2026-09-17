@@ -73,7 +73,7 @@ describe("sarifExporter", () => {
     expect(sarif.runs).toHaveLength(1);
 
     const run = sarif.runs[0];
-    expect(run.tool.driver.name).toBe("code-analyzer");
+    expect(run.tool.driver.name).toBe("codegraph-scan");
     expect(run.tool.driver.rules.map((r: { id: string }) => r.id).sort()).toEqual(
       ["quality/generated-file-count", "security/sql-injection-raw-query"].sort(),
     );

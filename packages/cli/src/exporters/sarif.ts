@@ -2,7 +2,7 @@ import type { Finding, ResultExporter, ScanResult, Severity, SourceLocation } fr
 
 const SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json";
 const SARIF_VERSION = "2.1.0";
-const TOOL_NAME = "code-analyzer";
+const TOOL_NAME = "codegraph-scan";
 
 /** SARIF's `level` is a closed 4-value enum; map our 5-value `Severity` onto it (ADR-0007). */
 function toSarifLevel(severity: Severity): "error" | "warning" | "note" | "none" {

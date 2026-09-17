@@ -44,7 +44,7 @@ async function main(): Promise<number> {
       return 0;
     }
     default: {
-      process.stderr.write("Usage: code-analyzer <scan|export> [...flags]\n");
+      process.stderr.write("Usage: codegraph-scan <scan|export> [...flags]\n");
       return 1;
     }
   }

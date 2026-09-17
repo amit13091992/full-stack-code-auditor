@@ -30,7 +30,7 @@ function buildConfig(root: string, profile: ScanProfile): AnalyzerConfig {
 }
 
 /**
- * `code-analyzer scan <root> [--profile <profile>] [--format json|sarif|html] [--out <path>]`
+ * `codegraph-scan scan <root> [--profile <profile>] [--format json|sarif|html] [--out <path>]`
  * (docs/tasks/cli-and-reporting.md). Wires real Phase 1 discovery + `graphProjectIndexer`
  * (Phase 3, the superset indexer — it composes Phase 2's real parsing and then builds the Module/
  * Symbol Graph over the result, so `scan` gets both without wiring two separate indexers) +
@@ -41,7 +41,7 @@ function buildConfig(root: string, profile: ScanProfile): AnalyzerConfig {
 export async function runScanCommand(args: ParsedArgs): Promise<ScanCommandResult> {
   const root = args.positional[0];
   if (!root) {
-    return { exitCode: 1, errorMessage: "Usage: code-analyzer scan <root> [--profile <profile>] [--format json|sarif|html] [--out <path>]" };
+    return { exitCode: 1, errorMessage: "Usage: codegraph-scan scan <root> [--profile <profile>] [--format json|sarif|html] [--out <path>]" };
   }
 
   const format = (args.flags.format ?? "json") as ExportFormat;

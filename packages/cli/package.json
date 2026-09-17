@@ -7,7 +7,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "code-analyzer": "./dist/bin.js"
+    "codegraph-scan": "./dist/bin.js"
   },
   "scripts": {
     "build": "tsc -b",

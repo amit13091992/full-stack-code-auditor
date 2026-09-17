@@ -50,7 +50,7 @@ export const htmlExporter: ResultExporter = {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>code-analyzer report</title>
+<title>codegraph-scan report</title>
 <style>
   body { font-family: system-ui, sans-serif; margin: 2rem; color: #1a1a1a; }
   h1 { margin-bottom: 0.25rem; }
@@ -67,7 +67,7 @@ export const htmlExporter: ResultExporter = {
 </style>
 </head>
 <body>
-  <h1>code-analyzer report</h1>
+  <h1>codegraph-scan report</h1>
   <div class="summary">
     ${result.summary.totalFindings} finding(s) across ${result.summary.filesAnalyzed} file(s),
     analyzers run: ${escapeHtml(result.summary.analyzersRun.join(", ") || "none")}

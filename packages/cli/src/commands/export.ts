@@ -13,7 +13,7 @@ export interface ExportCommandResult {
 }
 
 /**
- * `code-analyzer export --format <fmt> --in <scan-result.json> --out <path>`
+ * `codegraph-scan export --format <fmt> --in <scan-result.json> --out <path>`
  * (docs/tasks/cli-and-reporting.md) — re-exports an already-produced `ScanResult` into a different
  * format without re-running discovery/analysis.
  */
