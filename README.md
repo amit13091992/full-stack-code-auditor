@@ -100,17 +100,6 @@ empty until a real `Analyzer` is registered in `@code-analyzer/analyzers`. This 
 proves the discover → report pipeline works end-to-end before parsing, graphs, and detection logic
 are wired in on top of it.
 
-## Documentation
-
-- [`CLAUDE.md`](CLAUDE.md) — durable project conventions for contributors and coding agents
-- [`docs/architecture/overview.md`](docs/architecture/overview.md) — full pipeline and package boundaries
-- [`docs/domain-model/overview.md`](docs/domain-model/overview.md) — domain entities
-- [`docs/analyzer-engine/lifecycle.md`](docs/analyzer-engine/lifecycle.md) — the scan lifecycle
-- [`docs/graph/overview.md`](docs/graph/overview.md) · [`docs/parser/overview.md`](docs/parser/overview.md) · [`docs/security/overview.md`](docs/security/overview.md)
-- [`docs/testing/strategy.md`](docs/testing/strategy.md) — fixtures and test layout
-- [`docs/decisions/`](docs/decisions/) — architecture decision records (the "why" behind each phase's choices)
-- [`docs/project-status.md`](docs/project-status.md) — current phase, what's reviewed, what's next
-
 ## Contributing
 
 Read `CLAUDE.md` first. Changes to any contract in `packages/core` require an ADR
