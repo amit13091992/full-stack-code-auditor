@@ -4,6 +4,7 @@ import type { AnalyzerConfig, ScanProfile, ScanResult } from "@code-analyzer/cor
 import { AnalyzerClient } from "@code-analyzer/core";
 import { projectModelDiscoverer } from "@code-analyzer/project-model";
 import { graphProjectIndexer } from "@code-analyzer/graph";
+import { registerBuiltinAnalyzers } from "@code-analyzer/analyzers";
 import type { ParsedArgs } from "../args.js";
 import { getExporter, type ExportFormat } from "../exporters/index.js";
 import { InMemoryAnalyzerRegistry } from "../registry.js";
@@ -33,8 +34,9 @@ function buildConfig(root: string, profile: ScanProfile): AnalyzerConfig {
  * (docs/tasks/cli-and-reporting.md). Wires real Phase 1 discovery + `graphProjectIndexer`
  * (Phase 3, the superset indexer — it composes Phase 2's real parsing and then builds the Module/
  * Symbol Graph over the result, so `scan` gets both without wiring two separate indexers) +
- * whatever analyzers are registered (none today — `@code-analyzer/analyzers` is still an empty
- * stub, so `findings` is legitimately empty; `diagnostics` is no longer, per ADR-0008).
+ * `@code-analyzer/analyzers`' built-in rules (`docs/tasks/first-graph-analyzers.md`), registered
+ * against this command's own `InMemoryAnalyzerRegistry` — not wired directly into the package, per
+ * the analyzer-development skill's registry-based integration pattern.
  */
 export async function runScanCommand(args: ParsedArgs): Promise<ScanCommandResult> {
   const root = args.positional[0];
@@ -59,9 +61,12 @@ export async function runScanCommand(args: ParsedArgs): Promise<ScanCommandResul
     return { exitCode: 1, errorMessage: `Repository root not found: ${absoluteRoot}` };
   }
 
+  const registry = new InMemoryAnalyzerRegistry();
+  registerBuiltinAnalyzers(registry);
+
   const client = new AnalyzerClient({
     config: buildConfig(absoluteRoot, profile),
-    registry: new InMemoryAnalyzerRegistry(),
+    registry,
     strategies: {
       discoverer: projectModelDiscoverer,
       indexer: graphProjectIndexer,

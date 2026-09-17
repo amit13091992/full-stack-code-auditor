@@ -2,9 +2,8 @@ import type { Analyzer, AnalyzerCategory, AnalyzerRegistry } from "@code-analyze
 
 /**
  * Minimal in-memory `AnalyzerRegistry` — wiring, not analysis logic (Section 32: the CLI contains
- * "no analysis logic, only... wiring to AnalyzerClient"). `@code-analyzer/analyzers` has no
- * analyzers registered yet, so `scan` runs against an empty registry today; that's expected, not a
- * bug (see docs/tasks/cli-and-reporting.md Non-goals).
+ * "no analysis logic, only... wiring to AnalyzerClient"). `scan.ts` populates an instance of this
+ * with `@code-analyzer/analyzers`' built-in rules via `registerBuiltinAnalyzers`.
  */
 export class InMemoryAnalyzerRegistry implements AnalyzerRegistry {
   private readonly analyzers = new Map<string, Analyzer>();

@@ -1,35 +1,72 @@
 # dependencies
 node_modules/
 .pnpm-store/
+.pnp
+.pnp.js
 
 # build output (every packages/*/dist)
 dist/
 build/
 *.tsbuildinfo
 .turbo/
+.next/
+out/
 
 # test / coverage
 coverage/
 .vitest-cache/
+.nyc_output/
 
 # lint / tooling caches
 .eslintcache
 
 # logs
+logs/
 *.log
 pnpm-debug.log*
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# env / secrets — never commit real values (see CLAUDE.md Security requirements)
+# env / secrets — never commit real values (see .claude/rules/security.md)
 .env
+.env.local
 .env.*
+.env.*.local
 !.env.example
 .cache/
 
+# runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# temporary files
+tmp/
+temp/
+*.tmp
+
 # editor / OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+ehthumbs.db
+Thumbs.db
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+
+# personal Claude Code overrides — never shared
+CLAUDE.local.md
+.claude/
 
 # Claude Code local, machine-specific overrides (not the shared .claude/settings.json)
 .claude/settings.local.json
