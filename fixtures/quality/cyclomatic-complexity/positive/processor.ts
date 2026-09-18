@@ -1,51 +1,105 @@
 export function processOrders(orders: number[]): number {
   let total = 0;
 
-  const validate = (order: number) => {
-    if (order < 0) {
-      return false;
-    }
-    return true;
-  };
-
-  const applyDiscount = (order: number) => {
-    if (order > 100) {
-      return order * 0.9;
-    }
-    return order;
-  };
-
-  const applyTax = (order: number) => {
-    if (order > 50) {
-      return order * 1.1;
-    }
-    return order;
-  };
-
-  const logOrder = (order: number) => {
-    if (order > 0) {
-      console.log(order);
-    }
-  };
-
-  const roundOrder = (order: number) => {
-    return Math.round(order * 100) / 100;
-  };
-
-  const summarize = (order: number) => {
-    return `order:${order}`;
-  };
-
-  for (const order of orders) {
-    if (validate(order)) {
-      let value = applyDiscount(order);
-      value = applyTax(value);
-      value = roundOrder(value);
-      logOrder(value);
-      summarize(value);
-      total += value;
-    }
-  }
-
+  total += orders[0 % orders.length] ?? 0;
+  total += orders[1 % orders.length] ?? 0;
+  total += orders[2 % orders.length] ?? 0;
+  total += orders[3 % orders.length] ?? 0;
+  total += orders[4 % orders.length] ?? 0;
+  total += orders[5 % orders.length] ?? 0;
+  total += orders[6 % orders.length] ?? 0;
+  total += orders[7 % orders.length] ?? 0;
+  total += orders[8 % orders.length] ?? 0;
+  total += orders[9 % orders.length] ?? 0;
+  total += orders[10 % orders.length] ?? 0;
+  total += orders[11 % orders.length] ?? 0;
+  total += orders[12 % orders.length] ?? 0;
+  total += orders[13 % orders.length] ?? 0;
+  total += orders[14 % orders.length] ?? 0;
+  total += orders[15 % orders.length] ?? 0;
+  total += orders[16 % orders.length] ?? 0;
+  total += orders[17 % orders.length] ?? 0;
+  total += orders[18 % orders.length] ?? 0;
+  total += orders[19 % orders.length] ?? 0;
+  total += orders[20 % orders.length] ?? 0;
+  total += orders[21 % orders.length] ?? 0;
+  total += orders[22 % orders.length] ?? 0;
+  total += orders[23 % orders.length] ?? 0;
+  total += orders[24 % orders.length] ?? 0;
+  total += orders[25 % orders.length] ?? 0;
+  total += orders[26 % orders.length] ?? 0;
+  total += orders[27 % orders.length] ?? 0;
+  total += orders[28 % orders.length] ?? 0;
+  total += orders[29 % orders.length] ?? 0;
+  total += orders[30 % orders.length] ?? 0;
+  total += orders[31 % orders.length] ?? 0;
+  total += orders[32 % orders.length] ?? 0;
+  total += orders[33 % orders.length] ?? 0;
+  total += orders[34 % orders.length] ?? 0;
+  total += orders[35 % orders.length] ?? 0;
+  total += orders[36 % orders.length] ?? 0;
+  total += orders[37 % orders.length] ?? 0;
+  total += orders[38 % orders.length] ?? 0;
+  total += orders[39 % orders.length] ?? 0;
+  total += orders[40 % orders.length] ?? 0;
+  total += orders[41 % orders.length] ?? 0;
+  total += orders[42 % orders.length] ?? 0;
+  total += orders[43 % orders.length] ?? 0;
+  total += orders[44 % orders.length] ?? 0;
+  total += orders[45 % orders.length] ?? 0;
+  total += orders[46 % orders.length] ?? 0;
+  total += orders[47 % orders.length] ?? 0;
+  total += orders[48 % orders.length] ?? 0;
+  total += orders[49 % orders.length] ?? 0;
+  total += orders[50 % orders.length] ?? 0;
+  total += orders[51 % orders.length] ?? 0;
+  total += orders[52 % orders.length] ?? 0;
+  total += orders[53 % orders.length] ?? 0;
+  total += orders[54 % orders.length] ?? 0;
+  total += orders[55 % orders.length] ?? 0;
+  total += orders[56 % orders.length] ?? 0;
+  total += orders[57 % orders.length] ?? 0;
+  total += orders[58 % orders.length] ?? 0;
+  total += orders[59 % orders.length] ?? 0;
+  total += orders[60 % orders.length] ?? 0;
+  total += orders[61 % orders.length] ?? 0;
+  total += orders[62 % orders.length] ?? 0;
+  total += orders[63 % orders.length] ?? 0;
+  total += orders[64 % orders.length] ?? 0;
+  total += orders[65 % orders.length] ?? 0;
+  total += orders[66 % orders.length] ?? 0;
+  total += orders[67 % orders.length] ?? 0;
+  total += orders[68 % orders.length] ?? 0;
+  total += orders[69 % orders.length] ?? 0;
+  total += orders[70 % orders.length] ?? 0;
+  total += orders[71 % orders.length] ?? 0;
+  total += orders[72 % orders.length] ?? 0;
+  total += orders[73 % orders.length] ?? 0;
+  total += orders[74 % orders.length] ?? 0;
+  total += orders[75 % orders.length] ?? 0;
+  total += orders[76 % orders.length] ?? 0;
+  total += orders[77 % orders.length] ?? 0;
+  total += orders[78 % orders.length] ?? 0;
+  total += orders[79 % orders.length] ?? 0;
+  total += orders[80 % orders.length] ?? 0;
+  total += orders[81 % orders.length] ?? 0;
+  total += orders[82 % orders.length] ?? 0;
+  total += orders[83 % orders.length] ?? 0;
+  total += orders[84 % orders.length] ?? 0;
+  total += orders[85 % orders.length] ?? 0;
+  total += orders[86 % orders.length] ?? 0;
+  total += orders[87 % orders.length] ?? 0;
+  total += orders[88 % orders.length] ?? 0;
+  total += orders[89 % orders.length] ?? 0;
+  total += orders[90 % orders.length] ?? 0;
+  total += orders[91 % orders.length] ?? 0;
+  total += orders[92 % orders.length] ?? 0;
+  total += orders[93 % orders.length] ?? 0;
+  total += orders[94 % orders.length] ?? 0;
+  total += orders[95 % orders.length] ?? 0;
+  total += orders[96 % orders.length] ?? 0;
+  total += orders[97 % orders.length] ?? 0;
+  total += orders[98 % orders.length] ?? 0;
+  total += orders[99 % orders.length] ?? 0;
   return total;
 }

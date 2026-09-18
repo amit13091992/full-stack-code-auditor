@@ -214,10 +214,30 @@ imports — confirmed empirically, not assumed; see technical debt below.
   (it now documents "this specific fixture is clean," not "no analyzers are registered") rather than
   removed, since it's still valid coverage. Manually verified against the built `dist/bin.js`.
 
+- **Test coverage ingestion & code quality analyzers** (Track A + Track B1 of ADR-0010, post-Phase-3,
+  user-requested capability expansion): `CoverageModel`/`FileCoverage`/`CoverageStatus`
+  (`packages/core/src/domain/coverage.ts`) plus an optional `AnalyzerContext.coverage`/
+  `ScanOptions.coverage` field; LCOV/Istanbul/`coverage-final.json`/coverage.py parsers in
+  `@code-analyzer/integrations` (its first real content) mapping report paths to `FileId`s and
+  emitting a `COVERAGE_UNMAPPED_FILE` diagnostic (never a silent guess) for paths that don't
+  resolve; a file the report never mentions stays absent from `CoverageModel.files` — surfaced as
+  `"unknown"`, never defaulted to `"uncovered"` (ADR-0004 discipline, verified by test). Wired into
+  the CLI as an explicit opt-in `code-analyzer scan --coverage <path>` flag — never automatic test
+  execution (Section 31). Four new quality analyzers registered alongside the existing three
+  (`quality/cyclomatic-complexity`, `quality/duplication`, `quality/maintainability-index`,
+  `quality/lint-style-rules`), all Phase 2/3-only (`requiresGraphs: []`), each with positive +
+  false-positive fixtures under `fixtures/quality/`. `registerBuiltinAnalyzers` now registers 8
+  analyzers total. See ADR-0010 and `docs/tasks/security-quality-coverage-modules.md` (Track A/B1
+  checked off; Track B2/C/D remain blocked on Phase 4/5). Verified with `pnpm typecheck` (clean
+  across all 10 packages) and `pnpm test` (117/117 passing, 28/28 files), including
+  `tests/integrations/coverage.test.ts`, `tests/cli/coverage.test.ts`, and one test per new
+  quality analyzer.
+
 ## In-progress components
 
 None — Phase 1, the CLI & Reporting task, Phase 2, Phase 3, CommonJS support, Angular/Vue/Python
-support, and the first `@code-analyzer/analyzers` analyzers are all complete, pending human review.
+support, the first `@code-analyzer/analyzers` analyzers, and ADR-0010 Track A/B1 (coverage ingestion
++ quality analyzers) are all complete, pending human review.
 
 ## Blocked components
 
@@ -252,6 +272,14 @@ None.
   `import ... as` → `"namespace"`, `from ... import` → `"named"`, wildcard → `"namespace"` with
   `localName: "*"`), and `Symbol.exported` for Python being convention-derived (leading
   underscore) rather than keyword-derived: ADR-0009.
+- Security/quality/coverage subsystem package placement: no new packages for security or quality
+  analyzers (they're ordinary `Analyzer`s in `@code-analyzer/analyzers`, differentiated by
+  `category`, not package boundary); coverage gets the one genuinely new `packages/core` domain type
+  (`CoverageModel`) because "no data available" can't be represented by any existing contract;
+  coverage ingestion lives in `@code-analyzer/integrations` (external-artifact normalization,
+  ADR-0007's stated purpose) while correlation analyzers live in `@code-analyzer/analyzers`; security
+  SAST rules remain fully gated on Call Graph (Phase 4) + Taint Graph (Phase 5) per
+  `docs/security/overview.md`, unchanged: ADR-0010.
 
 ## Known technical debt
 
@@ -278,6 +306,12 @@ None.
 - No `--fail-on <severity>` CI-gating exit code on `scan` yet (deferred, cheap follow-up).
 - No `explain`/`graph`/`endpoints`/`dependencies` CLI subcommands yet — each needs data from a
   later phase (finding lookup, the graph, the endpoint/dependency models).
+- **`quality/cyclomatic-complexity` computes a documented proxy score, not true McCabe complexity**
+  (`1 + nestedFunctionCount + floor(lineSpan/10)`, confidence capped at 0.45) — `FunctionEntity`
+  retains no AST/branch data today, and `parseFile` doesn't recurse into function bodies to capture
+  nested functions, so a real branch-count metric needs a `packages/parser`/`packages/core` change,
+  not made here (Section 35.13 — flagged, not built ahead of need). Revisit if/when the parser gains
+  per-function branch tracking.
 - **`parserProjectIndexer` now skips files over 5 MB** (`MAX_PARSEABLE_FILE_SIZE_BYTES`,
   `packages/parser/src/project-indexer.ts`) rather than parsing them — a security-review-flagged
   fix for Section 31 (repository content is hostile input; an unbounded-size file handed to
