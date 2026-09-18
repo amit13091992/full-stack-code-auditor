@@ -7,6 +7,7 @@ import { graphProjectIndexer } from "@code-analyzer/graph";
 import { registerBuiltinAnalyzers } from "@code-analyzer/analyzers";
 import type { ParsedArgs } from "../args.js";
 import { getExporter, type ExportFormat } from "../exporters/index.js";
+import { renderHtmlReport } from "../exporters/html.js";
 import { InMemoryAnalyzerRegistry } from "../registry.js";
 
 const VALID_FORMATS: readonly ExportFormat[] = ["json", "sarif", "html"];
@@ -80,7 +81,9 @@ export async function runScanCommand(args: ParsedArgs): Promise<ScanCommandResul
     return { exitCode: 1, errorMessage: error instanceof Error ? error.message : String(error) };
   }
 
-  const report = getExporter(format).export(result);
+  // `html` gets the live repo root so the report can show real source-code snippets per finding
+  // (the `export` command re-formatting a saved ScanResult JSON has no root and gets none — expected).
+  const report = format === "html" ? renderHtmlReport(result, { rootPath: absoluteRoot }) : getExporter(format).export(result);
 
   const outPath = args.flags.out;
   if (outPath) {

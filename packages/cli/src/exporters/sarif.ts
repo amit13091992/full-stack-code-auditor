@@ -46,6 +46,19 @@ function toSarifResult(finding: Finding) {
   };
 }
 
+/** First finding seen for a ruleId stands in for that rule's identity — `Finding` carries no separate rule catalog today. */
+function toSarifRules(findings: readonly Finding[]) {
+  const byRuleId = new Map<string, Finding>();
+  for (const finding of findings) {
+    if (!byRuleId.has(finding.ruleId)) byRuleId.set(finding.ruleId, finding);
+  }
+  return [...byRuleId.entries()].map(([ruleId, finding]) => ({
+    id: ruleId,
+    shortDescription: { text: finding.title },
+    properties: { category: finding.category },
+  }));
+}
+
 export const sarifExporter: ResultExporter = {
   format: "sarif",
   export(result: ScanResult): string {
@@ -57,7 +70,7 @@ export const sarifExporter: ResultExporter = {
           tool: {
             driver: {
               name: TOOL_NAME,
-              rules: [...new Set(result.findings.map((f) => f.ruleId))].map((ruleId) => ({ id: ruleId })),
+              rules: toSarifRules(result.findings),
             },
           },
           results: result.findings.map(toSarifResult),

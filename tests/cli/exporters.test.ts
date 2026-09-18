@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
-import type { Finding, FindingId, ScanResult } from "../../packages/core/src/index.js";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { Diagnostic, Evidence, EvidenceId, Finding, FindingId, ScanResult } from "../../packages/core/src/index.js";
 import { SCAN_RESULT_SCHEMA_VERSION } from "../../packages/core/src/index.js";
 import { htmlExporter, jsonExporter, sarifExporter } from "../../packages/cli/src/exporters/index.js";
+import { renderHtmlReport } from "../../packages/cli/src/exporters/html.js";
 
 const findings: readonly Finding[] = [
   {
@@ -77,6 +81,9 @@ describe("sarifExporter", () => {
     expect(run.tool.driver.rules.map((r: { id: string }) => r.id).sort()).toEqual(
       ["quality/generated-file-count", "security/sql-injection-raw-query"].sort(),
     );
+    const sqlRule = run.tool.driver.rules.find((r: { id: string }) => r.id === "security/sql-injection-raw-query");
+    expect(sqlRule.shortDescription.text).toBe("Possible SQL injection");
+    expect(sqlRule.properties.category).toBe("security");
 
     expect(run.results).toHaveLength(2);
     const [sqlResult] = run.results;
@@ -101,8 +108,8 @@ describe("htmlExporter", () => {
     expect(output).toContain("2 finding(s) across 5 file(s)");
     expect(output).toContain("Possible SQL injection");
     expect(output).toContain("Generated file: dist/index.js");
-    expect(output).toContain("critical (1)");
-    expect(output).toContain("info (1)");
+    expect(output).toMatch(/sev-chip-critical[\s\S]*?<span class="sev-chip-count">1<\/span>/);
+    expect(output).toMatch(/sev-chip-info[\s\S]*?<span class="sev-chip-count">1<\/span>/);
   });
 
   it("escapes finding content to prevent HTML injection from untrusted repository content", () => {
@@ -117,11 +124,104 @@ describe("htmlExporter", () => {
       ],
     };
     const output = htmlExporter.export(maliciousResult);
-    // No unescaped tag delimiters from untrusted content may reach the output — that's what
-    // would let a payload break out of text content and execute.
-    expect(output).not.toContain("<script>");
-    expect(output).not.toContain("<img ");
+    // The malicious payload itself must never reach the output unescaped — that's what would let
+    // it break out of text content and execute. The report's own trusted, hand-written <script>
+    // block (for client-side filtering) is not what this test is about, so we assert against the
+    // exact injected payload strings rather than banning "<script>"/"<img " outright.
+    expect(output).not.toContain("<script>alert(1)</script>");
+    expect(output).not.toContain("<img src=x onerror=alert(1)>");
     expect(output).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(output).toContain("&lt;img src=x onerror=alert(1)&gt;");
+  });
+
+  it("renders a finding's Evidence, not just its generic rule description", () => {
+    const evidence: Evidence = {
+      id: "ev-1" as EvidenceId,
+      kind: "ast-pattern",
+      summary: "Raw string concatenation with request.query.id passed to db.query(...)",
+      locations: [{ fileId: "src/db.ts" as never, path: "src/db.ts", range: { start: { offset: 0, line: 9, column: 0 }, end: { offset: 5, line: 9, column: 5 } } }],
+      confidence: 0.9,
+    };
+    const resultWithEvidence: ScanResult = {
+      ...fixedResult,
+      findings: [{ ...findings[0]!, evidenceIds: [evidence.id] }, findings[1]!],
+      evidence: [evidence],
+    };
+    const output = htmlExporter.export(resultWithEvidence);
+    expect(output).toContain("Raw string concatenation with request.query.id passed to db.query(...)");
+    expect(output).toContain("src/db.ts:10");
+  });
+
+  it("renders diagnostics (parse errors, skipped files) in their own section", () => {
+    const diagnostics: readonly Diagnostic[] = [
+      {
+        code: "FILE_SKIPPED_SIZE_LIMIT",
+        severity: "warning",
+        message: "File exceeds the 5 MB parse limit and was skipped.",
+        source: "parser",
+        filePath: "vendor/huge-bundle.js",
+      },
+    ];
+    const resultWithDiagnostics: ScanResult = { ...fixedResult, diagnostics };
+    const output = htmlExporter.export(resultWithDiagnostics);
+    expect(output).toMatch(/Diagnostics <span class="section-count">1<\/span>/);
+    expect(output).toContain("FILE_SKIPPED_SIZE_LIMIT");
+    expect(output).toContain("File exceeds the 5 MB parse limit and was skipped.");
+    expect(output).toContain("vendor/huge-bundle.js");
+  });
+
+  it("shows an explicit empty state when there are no diagnostics", () => {
+    const output = htmlExporter.export(fixedResult);
+    expect(output).toMatch(/Diagnostics <span class="section-count">0<\/span>/);
+    expect(output).toContain("No diagnostics");
+  });
+
+  it("groups findings into per-category sections with a sidebar nav", () => {
+    const output = htmlExporter.export(fixedResult);
+    expect(output).toContain('id="cat-security"');
+    expect(output).toContain('id="cat-quality"');
+    expect(output).toContain('data-nav-target="cat-security"');
+    expect(output).toContain('data-nav-target="cat-quality"');
+  });
+
+  describe("with rootPath (source-code snippets)", () => {
+    let root: string;
+
+    beforeEach(() => {
+      root = mkdtempSync(join(tmpdir(), "codegraph-scan-html-test-"));
+      mkdirSync(join(root, "src"), { recursive: true });
+      // findings[0]'s location is src/db.ts, range.start.line 4 (0-based) — put the "bad" line
+      // at index 4 so the rendered snippet's highlighted line is exactly the query line below.
+      writeFileSync(
+        join(root, "src", "db.ts"),
+        ["import { pool } from './pool';", "", "export function run(id: string) {", "  // build query", "  return pool.query(`SELECT * FROM t WHERE id = ${id}`);", "}", ""].join("\n"),
+      );
+    });
+
+    afterEach(() => {
+      rmSync(root, { recursive: true, force: true });
+    });
+
+    it("embeds a real source snippet around the finding's location", () => {
+      const output = renderHtmlReport(fixedResult, { rootPath: root });
+      expect(output).toContain('<div class="finding-code">');
+      expect(output).toContain("SELECT * FROM t WHERE id");
+      expect(output).toContain("code-line-highlight");
+    });
+
+    it("never throws and omits the snippet when the file doesn't exist", () => {
+      const missingFileResult: ScanResult = {
+        ...fixedResult,
+        findings: [{ ...findings[0]!, locations: [{ ...findings[0]!.locations[0]!, path: "does/not/exist.ts" }] }, findings[1]!],
+      };
+      expect(() => renderHtmlReport(missingFileResult, { rootPath: root })).not.toThrow();
+      const output = renderHtmlReport(missingFileResult, { rootPath: root });
+      expect(output).not.toContain('<div class="finding-code">');
+    });
+
+    it("omits snippets entirely when no rootPath is given (the export command's re-format path)", () => {
+      const output = htmlExporter.export(fixedResult);
+      expect(output).not.toContain('<div class="finding-code">');
+    });
   });
 });
