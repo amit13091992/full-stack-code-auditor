@@ -12,6 +12,7 @@ export * from "./database-entity.js";
 export * from "./service.js";
 export * from "./security-boundary.js";
 export * from "./data-flow.js";
+export * from "./coverage.js";
 export * from "./evidence.js";
 export * from "./finding.js";
 export * from "./project.js";

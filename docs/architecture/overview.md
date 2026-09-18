@@ -51,6 +51,16 @@ enforced by `core`'s `package.json` having zero `@code-analyzer/*` dependencies 
   populated (Section 13, deferred since Phase 1's ADR-0005) — see `docs/project-status.md`.
 - `REFERENCES` edges (Symbol Graph) are blocked on Phase 2 not collecting symbol-occurrence data
   yet — declarations only, not every place a symbol is used. See `docs/graph/overview.md`.
+- Security vulnerability scanning (SAST rules beyond the existing `secrets` analyzer), code quality
+  analysis (complexity, duplication, maintainability, lint-style rules, architectural smells), and
+  test coverage ingestion/correlation (LCOV/Istanbul/coverage.py, flagging untested paths that reach
+  risky sinks) have no implementation yet — only a design and phased plan:
+  `docs/decisions/ADR-0010-security-quality-coverage-subsystems.md` (package placement, the new
+  `CoverageModel` core contract, the ingestion-boundary decision for Section 31) and
+  `docs/tasks/security-quality-coverage-modules.md` (checklist, explicitly split into work blocked
+  on Phase 4/Phase 5 vs. work that isn't). ADR-0010 is still **Proposed**, awaiting human review —
+  see `docs/project-status.md` for what phase this project is actually in before treating any of
+  this as approved or started.
 
 ## Where to look for detail
 

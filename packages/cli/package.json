@@ -18,7 +18,8 @@
     "@code-analyzer/core": "workspace:*",
     "@code-analyzer/project-model": "workspace:*",
     "@code-analyzer/graph": "workspace:*",
-    "@code-analyzer/analyzers": "workspace:*"
+    "@code-analyzer/analyzers": "workspace:*",
+    "@code-analyzer/integrations": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

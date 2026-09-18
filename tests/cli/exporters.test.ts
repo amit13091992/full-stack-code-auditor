@@ -105,11 +105,17 @@ describe("htmlExporter", () => {
   it("renders a self-contained page grouping findings by severity", () => {
     const output = htmlExporter.export(fixedResult);
     expect(output).toContain("<!doctype html>");
-    expect(output).toContain("2 finding(s) across 5 file(s)");
+    expect(output).toContain(">2<");
+    expect(output).toContain("Total findings");
+    expect(output).toContain(">5<");
+    expect(output).toContain("Files analyzed");
     expect(output).toContain("Possible SQL injection");
     expect(output).toContain("Generated file: dist/index.js");
     expect(output).toMatch(/sev-chip-critical[\s\S]*?<span class="sev-chip-count">1<\/span>/);
     expect(output).toMatch(/sev-chip-info[\s\S]*?<span class="sev-chip-count">1<\/span>/);
+    // Quality gate fails on any critical finding, independent of --fail-on (Section 43 semantics).
+    expect(output).toContain("gate-fail");
+    expect(output).toContain("Failed");
   });
 
   it("escapes finding content to prevent HTML injection from untrusted repository content", () => {

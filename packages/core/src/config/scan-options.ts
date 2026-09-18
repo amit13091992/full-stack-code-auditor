@@ -1,3 +1,4 @@
+import type { CoverageModel } from "../domain/coverage.js";
 import type { ScanMode, ScanProfile } from "../domain/scan.js";
 
 export interface IgnoreConfig {
@@ -45,4 +46,6 @@ export interface ScanOptions {
   readonly baseCommit?: string;
   readonly headCommit?: string;
   readonly signal?: AbortSignal;
+  /** Pre-ingested test coverage (`packages/integrations/src/coverage/*`), surfaced to analyzers via `AnalyzerContext.coverage`. */
+  readonly coverage?: CoverageModel;
 }

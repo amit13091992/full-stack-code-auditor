@@ -23,6 +23,12 @@ export interface AnalyzerCapabilities {
  * An Analyzer is a pure function of AnalyzerContext -> AnalysisResult: it must not mutate the
  * ProjectModel or graphs it is given, and it must not perform its own file I/O or AST parsing —
  * both are already normalized into `context.project` before `analyze()` runs.
+ *
+ * One narrow, named exception exists for pattern-scanning analyzers with no AST/graph
+ * representation of what they match (e.g. secrets detection) — see ADR-0011
+ * (docs/decisions/ADR-0011-analyzer-raw-text-read-exception.md) and
+ * packages/analyzers/src/shared/read-source-text-safely.ts, the one sanctioned utility for it.
+ * This is opt-in per analyzer, not a general capability — most analyzers should never need it.
  */
 export interface Analyzer {
   readonly id: string;

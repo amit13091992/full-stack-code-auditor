@@ -71,6 +71,9 @@ importers:
       '@code-analyzer/graph':
         specifier: workspace:*
         version: link:../graph
+      '@code-analyzer/integrations':
+        specifier: workspace:*
+        version: link:../integrations
       '@code-analyzer/project-model':
         specifier: workspace:*
         version: link:../project-model

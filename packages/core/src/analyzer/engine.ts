@@ -119,6 +119,7 @@ export class ScanEngine {
         events,
         signal,
         ...(options.changedFiles ? { changedFiles: options.changedFiles } : {}),
+        ...(options.coverage ? { coverage: options.coverage } : {}),
       };
 
       for (const analyzer of analyzers) {

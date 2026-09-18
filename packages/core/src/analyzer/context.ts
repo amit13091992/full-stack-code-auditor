@@ -1,4 +1,5 @@
 import type { AnalyzerConfig } from "../config/scan-options.js";
+import type { CoverageModel } from "../domain/coverage.js";
 import type { FrameworkId, ProjectModel } from "../domain/project.js";
 import type { ScanId } from "../domain/ids.js";
 import type { Graph } from "../graph/graph.js";
@@ -35,4 +36,11 @@ export interface AnalyzerContext {
   readonly signal: AbortSignal;
   /** Files touched since `baseCommit`, populated only for incremental/changed-files scans. */
   readonly changedFiles?: readonly string[];
+  /**
+   * Test coverage data ingested from an external report (`packages/integrations/src/coverage/*`),
+   * populated only when the caller explicitly supplied one (e.g. CLI `--coverage`). Absent, not a
+   * degenerate `CoverageModel`, when no report was provided — analyzers must not treat "no
+   * `context.coverage`" the same as "every file uncovered" (ADR-0010).
+   */
+  readonly coverage?: CoverageModel;
 }
