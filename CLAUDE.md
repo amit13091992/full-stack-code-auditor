@@ -21,9 +21,12 @@ ADR-0001 (`docs/decisions/`) before adding or merging a package.
 
 ## Current phase
 
-**Phase 0 — Foundation & Contracts.** Check `docs/project-status.md` before starting substantial
-work — it is the source of truth for what phase we're in and what's approved to build next. Do not
-decide unilaterally that the project has advanced to the next phase.
+**Phase 3 — Graph Foundation, complete, awaiting human sign-off before Phase 4.** Also complete:
+CommonJS support, Angular/Vue/Python support, the CLI & Reporting task, the first
+`@code-analyzer/analyzers` rules (architecture + quality + secrets), and ADR-0010 Track A/B1 (test
+coverage ingestion + quality analyzers that need no call graph). Check `docs/project-status.md`
+before starting substantial work — it is the source of truth for what phase we're in and what's
+approved to build next. Do not decide unilaterally that the project has advanced to the next phase.
 
 ## Supported languages / frameworks (initial)
 

@@ -35,8 +35,15 @@ Repository -> ProjectModel -> AST/Symbol Model -> Graphs (module/dependency/call
   functions, classes, imports, and exports; Tree-sitter for Python into the same shapes.
 - **A real, queryable graph** — a Module Graph (cross-file `IMPORTS` resolution) and a Symbol
   Graph (`DECLARES`/`EXTENDS`/`IMPLEMENTS`) built over the parsed output, not just a flat file list.
-- **Three built-in analyzers** — `circular-import`, `unresolved-import`, and `unused-export`, each
-  backed by real `Evidence` (concrete proof, not just a rule description).
+- **Eight built-in analyzers** — architecture (`circular-import`, `unresolved-import`), quality
+  (`unused-export`, `cyclomatic-complexity`, `duplication`, `maintainability-index`,
+  `lint-style-rules`), and secrets (`pattern-scan`, real regex-based detection for AWS/GitHub/
+  Google/Slack/Stripe keys and private-key blocks) — each backed by real `Evidence` (concrete
+  proof, not just a rule description).
+- **Test coverage ingestion** — feed an existing LCOV / Istanbul (`coverage-final.json`) /
+  coverage.py report in with `--coverage <path>` and quality analyzers can see it; a file the
+  report never mentions is reported as `unknown` coverage, never conflated with 0%. `code-analyzer`
+  never runs your test suite itself — it only reads a report your own pipeline already produced.
 - **Three report formats** — JSON (the full, schema-versioned `ScanResult`), SARIF (for GitHub
   Code Scanning and other SARIF consumers), and a self-contained interactive HTML report with
   severity/category filters, search, and real source-code snippets per finding.
@@ -78,12 +85,15 @@ codegraph-scan scan <path-to-a-repo> --format html --out report.html
 # SARIF report with a specific profile
 codegraph-scan scan <path-to-a-repo> --profile standard --format sarif --out report.sarif
 
+# Include a test coverage report (LCOV/Istanbul/coverage.py, auto-detected)
+codegraph-scan scan <path-to-a-repo> --coverage coverage/lcov.info
+
 # Re-export an existing scan result to a different format
 codegraph-scan export --format sarif --in report.json --out report.sarif
 ```
 
 `scan` runs real discovery, parsing, and graph-building against whatever repo you point it at, runs
-the three built-in analyzers over the resulting graph, and produces a schema-versioned
+the eight built-in analyzers over the resulting graph, and produces a schema-versioned
 `ScanResult`.
 
 | Flag | Values | Default |
@@ -91,6 +101,7 @@ the three built-in analyzers over the resulting graph, and produces a schema-ver
 | `--format` | `json`, `sarif`, `html` | `json` |
 | `--profile` | `minimal`, `standard`, `security`, `full`, `enterprise` | `minimal` |
 | `--out` | path to write the report to | stdout |
+| `--coverage` | path to an LCOV / Istanbul / coverage.py report (format auto-detected) | none — coverage-aware analyzers see no data |
 
 ## Sample report
 
@@ -115,20 +126,23 @@ real analysis engine instead of drifting apart. See
 | `@code-analyzer/project-model` | Repository discovery -> normalized `ProjectModel`. | Implemented |
 | `@code-analyzer/parser` | AST / semantic source model — TypeScript Compiler API for JS/TS incl. CommonJS (ADR-0006), Tree-sitter for Python (ADR-0009). | Implemented |
 | `@code-analyzer/graph` | Module Graph + Symbol Graph, wired into a real `graphProjectIndexer`. | Implemented — call graph/taint graph are next |
-| `@code-analyzer/analyzers` | Analysis rules: circular-import, unresolved-import, unused-export. | 3 rules shipped — security/architecture/quality/performance/dependency/secrets/infra rules not started |
-| `@code-analyzer/cli` | `scan`/`export` commands, the three built-in analyzers wired against an in-memory registry, plus JSON/SARIF/HTML report exporters. | Implemented |
+| `@code-analyzer/analyzers` | Analysis rules: circular-import, unresolved-import, unused-export, cyclomatic-complexity, duplication, maintainability-index, lint-style-rules, secrets pattern-scan. | 8 rules shipped — SAST/injection/authn/authz rules blocked on the call graph + taint graph (Phase 4/5); see [ADR-0010](docs/decisions/ADR-0010-security-quality-coverage-subsystems.md) |
+| `@code-analyzer/cli` | `scan`/`export` commands, the eight built-in analyzers wired against an in-memory registry, an opt-in `--coverage` report flag, plus JSON/SARIF/HTML report exporters. | Implemented |
 | `@code-analyzer/engines` | Engine-level composition, finding correlation, risk scoring. | Not started |
-| `@code-analyzer/integrations` | External tool normalization (SARIF, CodeQL, Semgrep, ...) and CI/CD adapters. | Not started |
+| `@code-analyzer/integrations` | External tool normalization (SARIF, CodeQL, Semgrep, ...) and CI/CD adapters. LCOV/Istanbul/coverage.py test-coverage report parsing (`src/coverage/`) is its first real content. | Coverage ingestion implemented — CI/CD and other external-tool adapters not started |
 | `@code-analyzer/ai` | Optional AI investigation/remediation layer. | Not started |
 | `@code-analyzer/plugins` | Plugin host/loader runtime. | Not started |
 
 ## Roadmap
 
-Not built yet: call graphs, data-flow/taint graphs, security/architecture rules beyond the three
-shipped today, and Python cross-file import resolution (Python parses per-file but doesn't yet
-link `import`s across files). Every phase is signed off by a human before the next one starts —
-see [`docs/project-status.md`](docs/project-status.md) for the exact, up-to-date state, what's
-been reviewed, and what's next.
+Not built yet: call graphs, data-flow/taint graphs, SAST rules that need them (SQLi, XSS, SSRF,
+IDOR, authn/authz), coupling/dead-code quality rules that need the call graph, coverage×taint
+correlation, and Python cross-file import resolution (Python parses per-file but doesn't yet link
+`import`s across files). Every phase is signed off by a human before the next one starts — see
+[`docs/project-status.md`](docs/project-status.md) for the exact, up-to-date state, and
+[ADR-0010](docs/decisions/ADR-0010-security-quality-coverage-subsystems.md) /
+[the tracker](docs/tasks/security-quality-coverage-modules.md) for what's planned for security,
+quality, and coverage specifically.
 
 ## Developing this repo
 
