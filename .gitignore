@@ -66,6 +66,7 @@ Thumbs.db
 
 # personal Claude Code overrides — never shared
 CLAUDE.local.md
+CLAUDE.md
 .claude/
 
 # Claude Code local, machine-specific overrides (not the shared .claude/settings.json)
