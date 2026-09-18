@@ -16,34 +16,32 @@ Repository -> ProjectModel -> AST/Symbol Model -> Graphs (module/dependency/call
 
 ## Contents
 
-- [Where things stand](#where-things-stand)
+- [Features](#features)
 - [Supported languages / frameworks](#supported-languages--frameworks)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Sample report](#sample-report)
 - [Packages](#packages)
+- [Roadmap](#roadmap)
 - [Developing this repo](#developing-this-repo)
 - [Contributing](#contributing)
 
-## Where things stand
+## Features
 
-**Phase 3 — Graph Foundation**, complete and reviewed, plus a working CLI with its first three
-real analyzers wired in. Every phase gets signed off by a human before the next one starts — see
-[`docs/project-status.md`](docs/project-status.md) for the exact, up-to-date state, what's been
-reviewed, and what's next.
-
-Concretely, today `codegraph-scan scan <repo>`:
-
-| Step | What happens |
-|---|---|
-| 1. Discover | Walks the repository, classifies every file, detects the package manager, workspace layout, and frameworks (React, React Native, Angular, Vue, Node.js, Express, NestJS, Next.js). |
-| 2. Parse | Parses every JS/TS file with the real TypeScript compiler (ESM and CommonJS) into functions, classes, imports, and exports; parses Python with Tree-sitter into the same shapes. |
-| 3. Build graphs | Builds a Module Graph (cross-file `IMPORTS` resolution) and a Symbol Graph (`DECLARES`/`EXTENDS`/`IMPLEMENTS`) over the parsed output. |
-| 4. Analyze | Runs three built-in analyzers over that graph — **circular-import**, **unresolved-import**, and **unused-export** — and emits real `Finding`s. |
-| 5. Report | Outputs the result as JSON, SARIF, or HTML. |
-
-**Not built yet:** call graphs, data-flow/taint graphs, security/architecture rules beyond the
-three above, and Python cross-file import resolution (Python parses per-file but doesn't yet link
-`import`s across files — see the technical debt section of `docs/project-status.md`).
+- **Real repository discovery** — walks the repo, classifies every file, detects the package
+  manager, workspace layout, and frameworks (React, React Native, Angular, Vue, Node.js, Express,
+  NestJS, Next.js).
+- **Real parsing, not regex** — the actual TypeScript compiler for JS/TS (ESM and CommonJS) into
+  functions, classes, imports, and exports; Tree-sitter for Python into the same shapes.
+- **A real, queryable graph** — a Module Graph (cross-file `IMPORTS` resolution) and a Symbol
+  Graph (`DECLARES`/`EXTENDS`/`IMPLEMENTS`) built over the parsed output, not just a flat file list.
+- **Three built-in analyzers** — `circular-import`, `unresolved-import`, and `unused-export`, each
+  backed by real `Evidence` (concrete proof, not just a rule description).
+- **Three report formats** — JSON (the full, schema-versioned `ScanResult`), SARIF (for GitHub
+  Code Scanning and other SARIF consumers), and a self-contained interactive HTML report with
+  severity/category filters, search, and real source-code snippets per finding.
+- **Monorepo-aware** — pnpm/npm/yarn workspaces are detected during discovery; point it at a
+  single package or the whole monorepo root.
 
 ## Supported languages / frameworks
 
@@ -55,9 +53,6 @@ three above, and Python cross-file import resolution (Python parses per-file but
 | C#, PHP, Java, Go, Ruby, Rust, ... | Not recognized — see [ADR-0009](docs/decisions/ADR-0009-angular-vue-python-support.md) for what adding a language actually takes |
 
 **Frameworks detected:** React, React Native, Angular, Vue, Node.js, Express, NestJS, Next.js.
-
-Works against a single repository or a monorepo — pnpm/npm/yarn workspaces are detected during
-discovery.
 
 ## Installation
 
@@ -97,6 +92,16 @@ the three built-in analyzers over the resulting graph, and produces a schema-ver
 | `--profile` | `minimal`, `standard`, `security`, `full`, `enterprise` | `minimal` |
 | `--out` | path to write the report to | stdout |
 
+## Sample report
+
+The HTML report groups findings into collapsible, per-category sections with a sidebar you can
+jump between, live severity/rule filters, full-text search, and a real source-code snippet
+(with the offending line highlighted) pulled straight from your repository for each finding:
+
+```bash
+codegraph-scan scan . --format html --out report.html && open report.html
+```
+
 ## Packages
 
 `packages/core` is the only package every other package depends on; it never depends back on
@@ -107,15 +112,23 @@ real analysis engine instead of drifting apart. See
 | Package | Purpose | Status |
 |---|---|---|
 | `@code-analyzer/core` | Domain model, contracts, and the `ScanEngine` lifecycle. Zero dependencies on other workspace packages, no analysis logic. | Implemented |
-| `@code-analyzer/project-model` | Repository discovery -> normalized `ProjectModel` (Phase 1). | Implemented |
+| `@code-analyzer/project-model` | Repository discovery -> normalized `ProjectModel`. | Implemented |
 | `@code-analyzer/parser` | AST / semantic source model — TypeScript Compiler API for JS/TS incl. CommonJS (ADR-0006), Tree-sitter for Python (ADR-0009). | Implemented |
-| `@code-analyzer/graph` | Module Graph + Symbol Graph, wired into a real `graphProjectIndexer` (Phase 3). | Implemented — call graph/taint graph land in Phase 4/5 |
+| `@code-analyzer/graph` | Module Graph + Symbol Graph, wired into a real `graphProjectIndexer`. | Implemented — call graph/taint graph are next |
 | `@code-analyzer/analyzers` | Analysis rules: circular-import, unresolved-import, unused-export. | 3 rules shipped — security/architecture/quality/performance/dependency/secrets/infra rules not started |
 | `@code-analyzer/cli` | `scan`/`export` commands, the three built-in analyzers wired against an in-memory registry, plus JSON/SARIF/HTML report exporters. | Implemented |
 | `@code-analyzer/engines` | Engine-level composition, finding correlation, risk scoring. | Not started |
 | `@code-analyzer/integrations` | External tool normalization (SARIF, CodeQL, Semgrep, ...) and CI/CD adapters. | Not started |
 | `@code-analyzer/ai` | Optional AI investigation/remediation layer. | Not started |
 | `@code-analyzer/plugins` | Plugin host/loader runtime. | Not started |
+
+## Roadmap
+
+Not built yet: call graphs, data-flow/taint graphs, security/architecture rules beyond the three
+shipped today, and Python cross-file import resolution (Python parses per-file but doesn't yet
+link `import`s across files). Every phase is signed off by a human before the next one starts —
+see [`docs/project-status.md`](docs/project-status.md) for the exact, up-to-date state, what's
+been reviewed, and what's next.
 
 ## Developing this repo
 
