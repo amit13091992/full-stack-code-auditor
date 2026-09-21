@@ -20,6 +20,7 @@ Repository -> ProjectModel -> AST/Symbol Model -> Graphs (module/dependency/call
 - [Supported languages / frameworks](#supported-languages--frameworks)
 - [Installation](#installation)
 - [Usage](#usage)
+- [HTTP API](#http-api-in-progress)
 - [Sample report](#sample-report)
 - [Packages](#packages)
 - [Roadmap](#roadmap)
@@ -33,8 +34,10 @@ Repository -> ProjectModel -> AST/Symbol Model -> Graphs (module/dependency/call
   NestJS, Next.js).
 - **Real parsing, not regex** — the actual TypeScript compiler for JS/TS (ESM and CommonJS) into
   functions, classes, imports, and exports; Tree-sitter for Python into the same shapes.
-- **A real, queryable graph** — a Module Graph (cross-file `IMPORTS` resolution) and a Symbol
-  Graph (`DECLARES`/`EXTENDS`/`IMPLEMENTS`) built over the parsed output, not just a flat file list.
+- **A real, queryable graph** — a Module Graph (cross-file `IMPORTS` resolution), a Symbol Graph
+  (`DECLARES`/`EXTENDS`/`IMPLEMENTS`), and a Call Graph (`CALLS` edges resolved from real call
+  sites, with `EdgeCertainty` — `direct`/`resolved`/`inferred`/`dynamic`/`unknown` — rather than a
+  false yes/no) built over the parsed output, not just a flat file list.
 - **Eight built-in analyzers** — architecture (`circular-import`, `unresolved-import`), quality
   (`unused-export`, `cyclomatic-complexity`, `duplication`, `maintainability-index`,
   `lint-style-rules`), and secrets (`pattern-scan`, real regex-based detection for AWS/GitHub/
@@ -49,6 +52,10 @@ Repository -> ProjectModel -> AST/Symbol Model -> Graphs (module/dependency/call
   severity/category filters, search, and real source-code snippets per finding.
 - **Monorepo-aware** — pnpm/npm/yarn workspaces are detected during discovery; point it at a
   single package or the whole monorepo root.
+- **HTTP API (in progress)** — `@code-analyzer/api` exposes the same `AnalyzerClient`/`ScanEngine`
+  pipeline the CLI uses over HTTP: upload a code archive, get back a `ScanResult`, optionally
+  streamed over SSE as the scan progresses. Stateless request/response only — no web UI, auth, or
+  persistence yet.
 
 ## Supported languages / frameworks
 
@@ -103,6 +110,26 @@ the eight built-in analyzers over the resulting graph, and produces a schema-ver
 | `--out` | path to write the report to | stdout |
 | `--coverage` | path to an LCOV / Istanbul / coverage.py report (format auto-detected) | none — coverage-aware analyzers see no data |
 
+## HTTP API (in progress)
+
+`@code-analyzer/api` runs the same analysis pipeline behind an HTTP server, for callers that can't
+shell out to the CLI. It's scoped to a stateless scan request/response only — no web UI, auth, or
+scan history/persistence yet.
+
+```bash
+# Run the server (defaults to :3000, override with PORT/HOST)
+pnpm run serve:api
+
+# Upload a .zip archive (or individual source files as multipart parts) and get a ScanResult back
+curl -F "file=@repo.zip" http://localhost:3000/v1/scans
+
+# Same, but stream ScanEvents over SSE as the scan progresses (ADR-0012)
+curl -N -F "file=@repo.zip" "http://localhost:3000/v1/scans?stream=true"
+
+# Health check
+curl http://localhost:3000/v1/health
+```
+
 ## Sample report
 
 The HTML report groups findings into collapsible, per-category sections with a sidebar you can
@@ -125,9 +152,10 @@ real analysis engine instead of drifting apart. See
 | `@code-analyzer/core` | Domain model, contracts, and the `ScanEngine` lifecycle. Zero dependencies on other workspace packages, no analysis logic. | Implemented |
 | `@code-analyzer/project-model` | Repository discovery -> normalized `ProjectModel`. | Implemented |
 | `@code-analyzer/parser` | AST / semantic source model — TypeScript Compiler API for JS/TS incl. CommonJS (ADR-0006), Tree-sitter for Python (ADR-0009). | Implemented |
-| `@code-analyzer/graph` | Module Graph + Symbol Graph, wired into a real `graphProjectIndexer`. | Implemented — call graph/taint graph are next |
-| `@code-analyzer/analyzers` | Analysis rules: circular-import, unresolved-import, unused-export, cyclomatic-complexity, duplication, maintainability-index, lint-style-rules, secrets pattern-scan. | 8 rules shipped — SAST/injection/authn/authz rules blocked on the call graph + taint graph (Phase 4/5); see [ADR-0010](docs/decisions/ADR-0010-security-quality-coverage-subsystems.md) |
+| `@code-analyzer/graph` | Module Graph, Symbol Graph, and Call Graph (`CALLS` edges from real call-site resolution), wired into a real `graphProjectIndexer`. | Implemented — taint graph (Phase 5) is next |
+| `@code-analyzer/analyzers` | Analysis rules: circular-import, unresolved-import, unused-export, cyclomatic-complexity, duplication, maintainability-index, lint-style-rules, secrets pattern-scan. | 8 rules shipped — SAST/injection/authn/authz rules blocked on the taint graph (Phase 5); see [ADR-0010](docs/decisions/ADR-0010-security-quality-coverage-subsystems.md) |
 | `@code-analyzer/cli` | `scan`/`export` commands, the eight built-in analyzers wired against an in-memory registry, an opt-in `--coverage` report flag, plus JSON/SARIF/HTML report exporters. | Implemented |
+| `@code-analyzer/api` | HTTP API exposing the same `AnalyzerClient`/`ScanEngine` pipeline over HTTP — upload a code archive, get back a `ScanResult`, optional SSE streaming (ADR-0012). | In progress — stateless scan endpoint only, no web UI/auth/persistence |
 | `@code-analyzer/engines` | Engine-level composition, finding correlation, risk scoring. | Not started |
 | `@code-analyzer/integrations` | External tool normalization (SARIF, CodeQL, Semgrep, ...) and CI/CD adapters. LCOV/Istanbul/coverage.py test-coverage report parsing (`src/coverage/`) is its first real content. | Coverage ingestion implemented — CI/CD and other external-tool adapters not started |
 | `@code-analyzer/ai` | Optional AI investigation/remediation layer. | Not started |
@@ -135,11 +163,12 @@ real analysis engine instead of drifting apart. See
 
 ## Roadmap
 
-Not built yet: call graphs, data-flow/taint graphs, SAST rules that need them (SQLi, XSS, SSRF,
-IDOR, authn/authz), coupling/dead-code quality rules that need the call graph, coverage×taint
-correlation, and Python cross-file import resolution (Python parses per-file but doesn't yet link
-`import`s across files). Every phase is signed off by a human before the next one starts — see
-[`docs/project-status.md`](docs/project-status.md) for the exact, up-to-date state, and
+Not built yet: the taint graph and the SAST rules that need it (SQLi, XSS, SSRF, IDOR, authn/authz),
+coupling/dead-code quality rules that need call-graph reachability, coverage×taint correlation, and
+Python cross-file import resolution (Python parses per-file but doesn't yet link `import`s across
+files). The Call Graph (Phase 4) is implemented — see Features above. Every phase is signed off by
+a human before the next one starts — see [`docs/project-status.md`](docs/project-status.md) for the
+exact, up-to-date state, and
 [ADR-0010](docs/decisions/ADR-0010-security-quality-coverage-subsystems.md) /
 [the tracker](docs/tasks/security-quality-coverage-modules.md) for what's planned for security,
 quality, and coverage specifically.

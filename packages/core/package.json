@@ -1,7 +1,7 @@
 {
   "name": "@code-analyzer/core",
   "version": "0.0.0",
-  "description": "Domain model, contracts, and analyzer lifecycle for the code analyzer platform. Phase 0: no analysis logic lives here.",
+  "description": "Domain model, contracts, and analyzer lifecycle for the code analyzer platform. No analysis logic lives here — consumed by every other workspace package.",
   "license": "UNLICENSED",
   "type": "module",
   "main": "./dist/index.js",

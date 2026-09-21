@@ -3,14 +3,6 @@ import type { ClassEntity, Diagnostic, FunctionEntity, GraphAccess, LanguageId, 
 import { parseFile } from "./parse-file.js";
 import { parsePythonFile } from "./python/parse-python-file.js";
 
-/**
- * Which parser handles which language (ADR-0006 for JS/TS, ADR-0009 for Python). Adding a new
- * language means adding a branch here and its own parser module — this dispatch is the seam future
- * languages extend, not a re-architecture.
- */
-const PARSEABLE_LANGUAGES = new Set<LanguageId>(["javascript", "typescript", "python"]);
-const SKIPPED_CLASSIFICATIONS = new Set(["generated", "vendored", "asset"]);
-
 interface ParsedFileResult {
   readonly module: Module;
   readonly symbols: readonly SymbolEntity[];
@@ -19,11 +11,20 @@ interface ParsedFileResult {
   readonly diagnostics: readonly Diagnostic[];
 }
 
-function parseByLanguage(language: LanguageId, params: { fileId: Module["fileId"]; path: string; content: string }): ParsedFileResult | undefined {
-  if (language === "javascript" || language === "typescript") return parseFile(params);
-  if (language === "python") return parsePythonFile(params);
-  return undefined;
-}
+type LanguageParser = (params: { fileId: Module["fileId"]; path: string; content: string }) => ParsedFileResult;
+
+/**
+ * Which parser handles which language (ADR-0006 for JS/TS, ADR-0009 for Python). Adding a new
+ * language means adding one entry here and its own parser module — no other branch to touch. This
+ * lookup table is the seam future languages extend, not a re-architecture.
+ */
+const LANGUAGE_PARSERS: Partial<Record<LanguageId, LanguageParser>> = {
+  javascript: parseFile,
+  typescript: parseFile,
+  python: parsePythonFile,
+};
+
+const SKIPPED_CLASSIFICATIONS = new Set(["generated", "vendored", "asset"]);
 
 /**
  * Files larger than this are skipped rather than parsed (Section 31: repository content is
@@ -65,7 +66,8 @@ export const parserProjectIndexer: ProjectIndexer = {
     let skippedForSize = 0;
 
     for (const file of project.files) {
-      if (!PARSEABLE_LANGUAGES.has(file.language) || SKIPPED_CLASSIFICATIONS.has(file.classification)) continue;
+      const parse = LANGUAGE_PARSERS[file.language];
+      if (!parse || SKIPPED_CLASSIFICATIONS.has(file.classification)) continue;
       if (file.encoding === "binary") continue;
       if (file.sizeBytes > MAX_PARSEABLE_FILE_SIZE_BYTES) {
         skippedForSize++;
@@ -81,8 +83,7 @@ export const parserProjectIndexer: ProjectIndexer = {
       }
 
       const content = await fs.readFile(file.absolutePath, "utf-8");
-      const result = parseByLanguage(file.language, { fileId: file.id, path: file.path, content });
-      if (!result) continue;
+      const result = parse({ fileId: file.id, path: file.path, content });
 
       modules.push(result.module);
       symbols.push(...result.symbols);

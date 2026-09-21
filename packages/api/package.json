@@ -12,7 +12,8 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist *.tsbuildinfo",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "start": "node dist/bin.js"
   },
   "dependencies": {
     "@code-analyzer/core": "workspace:*",

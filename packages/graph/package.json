@@ -1,7 +1,7 @@
 {
   "name": "@code-analyzer/graph",
   "version": "0.0.0",
-  "description": "Phase 3 (implemented): in-process Graph implementation plus Module Graph and Symbol Graph builders. Phase 4-5 add call-graph/taint-graph builders on top of the same core Graph contract.",
+  "description": "In-process Graph implementation plus Module Graph, Symbol Graph, and Call Graph builders (Phase 3-4, implemented). Phase 5 adds a taint graph on top of the same core Graph contract.",
   "license": "UNLICENSED",
   "type": "module",
   "main": "./dist/index.js",

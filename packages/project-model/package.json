@@ -1,7 +1,7 @@
 {
   "name": "@code-analyzer/project-model",
   "version": "0.0.0",
-  "description": "Phase 1: repository discovery, file classification, and the RepositoryDiscoverer that builds a ProjectModel from a filesystem root.",
+  "description": "Repository discovery, file classification (incl. Python), and the RepositoryDiscoverer that builds a ProjectModel from a filesystem root. Detects React/React Native/Angular/Vue/Node.js/Express/NestJS/Next.js.",
   "license": "UNLICENSED",
   "type": "module",
   "main": "./dist/index.js",
