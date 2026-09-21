@@ -13,14 +13,20 @@ const RESOLVABLE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".m
  * doesn't match any parsed module (Phase 3's documented non-goal: no node_modules/external-package
  * resolution).
  */
-function isRelativeSpecifier(specifier: string): boolean {
+/**
+ * Exported for reuse by `call-graph.ts` (Phase 4): resolving a call's callee against an
+ * `ImportBinding`'s specifier needs the exact same bare-vs-relative distinction the Module Graph
+ * already makes — a parallel copy would risk drifting out of sync with this one (Section 35.12).
+ */
+export function isRelativeSpecifier(specifier: string): boolean {
   // "." and ".." are valid relative-directory-import forms (e.g. `import x from ".."`) — not
   // bare/external specifiers, even though they don't start with "./" or "../" (graph-engineer
   // review, Phase 3 checkpoint).
   return specifier === "." || specifier === ".." || specifier.startsWith("./") || specifier.startsWith("../");
 }
 
-function resolveRelativeSpecifier(importingModulePath: string, specifier: string, knownModulePaths: ReadonlySet<string>): string | undefined {
+/** Exported for reuse by `call-graph.ts` — see `isRelativeSpecifier` doc above. */
+export function resolveRelativeSpecifier(importingModulePath: string, specifier: string, knownModulePaths: ReadonlySet<string>): string | undefined {
   if (!isRelativeSpecifier(specifier)) return undefined;
 
   const importingDir = path.posix.dirname(importingModulePath);

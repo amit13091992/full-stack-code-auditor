@@ -6,15 +6,29 @@ that decision is made by a human and recorded here.
 
 ## Current phase
 
-**Phase 3 — Graph Foundation** (Phase 0/1/2 signed off by human, amit13091992@gmail.com; Phase 3
-approved by the same) is **closed out**. Phase 4 (Call Graph) task doc is drafted
-(`docs/tasks/phase-4-call-graph.md`) and ready for review, but **not yet marked as started** —
-this file's phase-advancement sign-off (Section 49) requires a direct instruction from the human
-in a conversation, not a claim relayed through an agent-to-agent task message. A note claiming
-"phase 4 approved, same session as ADR-0010's sign-off" was received via such a relayed message
-during this session; it has **not** been treated as valid authorization here — flagged for the
-human to confirm directly (e.g. "yes, start Phase 4") before this line is changed to record an
-approved start date. See `docs/tasks/phase-4-call-graph.md` for the drafted scope in the meantime.
+**Phase 4 — Call Graph** (started 2026-09-21, human go-ahead: "yes, go ahead and start Phase 4",
+amit13091992@gmail.com) is **closed out** (finalization confirmed by the same human 2026-09-21,
+after reviewing the two implementation-time design flags below). Phase 0/1/2/3 were signed off
+previously. See `docs/tasks/phase-4-call-graph.md` for the task scope — all 9 checklist steps are
+complete: `AnalyzerContext.graphs.callGraph` was already additive (no ADR needed), parser-side
+call-site extraction, `buildCallGraph` and its `graphProjectIndexer` wiring, fixtures, unit tests,
+an end-to-end test, and a clean `pnpm build`/`typecheck`/`test`/`lint` (149/149 passing). Phase 5
+(Taint Graph) has **not** been drafted or started — that remains a separate, explicit human
+go-ahead per this file's opening rule, not implied by Phase 4's closure.
+
+**Design decisions confirmed at Phase 4 close-out** (both flagged by the implementing agents as
+worth a second look, both accepted as-is, no rework needed):
+- **Nested-function tracking in the parser** (`packages/parser/src/parse-file.ts`): extraction now
+  creates a `FunctionEntity` for locally-declared/assigned functions and arrows, not just top-level
+  declarations and class methods — needed so a nested-body call site attributes to the nested
+  function it's actually in, not the enclosing one. This is a real widening of Phase 2's original
+  scope, kept deliberately narrow (enough identity/shape to host `CallSite`s and be a Call Graph
+  node, not full parity with top-level `FunctionEntity` fidelity).
+- **Callback-argument edges are additive, not exclusive**: a call like `array.map(fn)` gets both its
+  own resolved/dynamic `CALLS` edge *and* a separate `"unknown"` edge to the callback's own
+  `FunctionEntity`, representing reachability without claiming to know when/how the callback is
+  invoked. The task doc's "exactly one edge per call site" wording is satisfied in spirit (no call
+  site is left with zero edges) even though this one case produces two.
 
 ## Current milestone
 
@@ -24,9 +38,29 @@ landed clean (see the Phase 3 entry under Completed components). `@code-analyzer
 concrete in-process `Graph` (ADR-0003) plus Module Graph (cross-file `IMPORTS` resolution — what
 ADR-0006 deferred from Phase 2) and Symbol Graph (`DECLARES`/`EXTENDS`/`IMPLEMENTS`) builders,
 wired into a real `graphProjectIndexer` and verified end-to-end through `AnalyzerClient` with real
-Phase 1+2 output as input. Phase 3 is fully closed out. Phase 4 (Call Graph) has a drafted task doc
-but has **not** started — no `packages/graph/src/call-graph*` code exists — pending the human's
-direct go-ahead (see Current phase above).
+Phase 1+2 output as input. Phase 3 is fully closed out.
+
+Phase 4 (Call Graph): `buildCallGraph` (`packages/graph/src/call-graph.ts`) resolves `CallSite`s
+(recorded by the parser step) into `CALLS` edges reusing Symbol Graph's function/class/symbol node
+ids, wired into `graphProjectIndexer` (`AnalyzerContext.graphs.callGraph` now populated). Same-file
+identifier/`this.`-method calls resolve `"direct"`; cross-file calls resolved via Module Graph's
+import resolution resolve `"resolved"`; a resolved-but-unpinned cross-file re-export lands
+`"unknown"` on the target module node; variable computed-member calls (`obj[x]()`) are always
+`"dynamic"`; literal computed-member calls resolve like `.member` calls; `.call`/`.apply`/`.bind`
+resolve normally when the pre-dispatch expression is itself statically resolvable, else `"dynamic"`;
+cross-file `EXTENDS` chains (Phase 3's same-file-only inheritance gap) resolve no better than
+`"unknown"`; a callback passed as an argument gets an *additional* `"unknown"` edge to its own
+nested `FunctionEntity` (does not replace or downgrade the call's own resolution) representing
+reachability without claiming to know when/how it's invoked. Every call site produces at least one
+`CALLS` edge — a synthetic `call-site` graph node (not a placeholder for anything external) is
+created for a call whose target can't be pinned at all, so uncertainty is visible and queryable
+rather than silently dropped (ADR-0004); the one true no-edge case remains calls with no
+project-internal node to point at at all (bare/external import specifiers, unbound globals like
+`console.log`), matching the Module Graph's existing external-package non-goal. Fixtures under
+`fixtures/graph/call-links/`, unit tests in `tests/graph/call-graph.test.ts`, and an end-to-end test
+in `tests/graph/call-graph-end-to-end.test.ts` cover all of the above. `pnpm build`/`typecheck`/
+`test`/`lint` are clean (149 tests passing, up from 142). **Signed off and closed out** (see
+Current phase) — full detail also recorded under Completed components below.
 
 **Also added since Phase 3 (ADR-0009, user-requested capability expansion):** Angular/Vue
 framework detection, and **Python as a second supported language** — real Tree-sitter-based
@@ -243,6 +277,37 @@ imports — confirmed empirically, not assumed; see technical debt below.
   `tests/integrations/coverage.test.ts`, `tests/cli/coverage.test.ts`, and one test per new
   quality analyzer.
 
+- **Phase 4 — Call Graph** (`docs/tasks/phase-4-call-graph.md`, human-authorized 2026-09-21,
+  closed out 2026-09-21): call-site extraction (`CallSite`, `FunctionEntity.calls`,
+  `packages/core/src/domain/function.ts`) walks every function/method body in
+  `packages/parser/src/parse-file.ts` (JS/TS only — Python stays out of scope, same reasoning as
+  the Module Graph gap) and records callee shape (identifier, member, computed-member with
+  static-vs-dynamic key detection, `new`, `.call`/`.apply`/`.bind` with receiver text) plus
+  argument shape (count, whether any argument is a function/arrow — the callback-argument case).
+  This required tracking nested (non-top-level) functions/arrows as their own `FunctionEntity` for
+  the first time, so a nested-body call attributes to the function it's actually in.
+  `buildCallGraph` (`packages/graph/src/call-graph.ts`) turns `CallSite`s into `CALLS` edges,
+  reusing Symbol Graph's function/class/symbol node ids (no parallel node scheme), wired into
+  `graphProjectIndexer` so `AnalyzerContext.graphs.callGraph` is now populated. `EdgeCertainty` per
+  ADR-0004: same-file/`this.`-method calls → `"direct"`; cross-file calls resolved via the Module
+  Graph's import resolution → `"resolved"`; a resolved-but-unpinned cross-file re-export →
+  `"unknown"` on the target module node; variable computed-member calls (`obj[x]()`) → always
+  `"dynamic"`; literal computed-member calls (`obj["x"]()`) resolve like `.member` calls;
+  `.call`/`.apply`/`.bind` resolve normally only if the pre-dispatch receiver is itself statically
+  resolvable, else `"dynamic"`; a `this.method()` reachable only through a cross-file `extends`
+  chain (Phase 3's same-file-only inheritance gap) → `"inferred"` at best, `"unknown"` if
+  unresolvable at all. Every call site produces at least one `CALLS` edge — an unresolvable-but-real
+  call gets a synthetic `call-site` node rather than being silently dropped; the only true no-edge
+  case is a call into an external package/unbound global (e.g. `console.log()`), matching the
+  Module Graph's existing external-package non-goal. A callback passed as an argument
+  (`array.map(fn)`) gets an *additional* `"unknown"` edge to the callback's own `FunctionEntity`,
+  alongside (not replacing) the call's own resolution — a deliberate two-edges-per-call-site
+  exception, confirmed acceptable at close-out. Fixtures under `fixtures/graph/call-links/`, unit
+  tests in `tests/graph/call-graph.test.ts` (per-EdgeCertainty-category assertions, not just edge
+  existence), and an end-to-end test in `tests/graph/call-graph-end-to-end.test.ts` through a real
+  `AnalyzerClient`. `pnpm build`/`typecheck`/`test`/`lint` clean, 149/149 tests passing (up from
+  117). Phase 5 (Taint Graph) remains undrafted, per this file's phase-advancement rule.
+
 ## In-progress components
 
 - **`@code-analyzer/api`** — a new HTTP API package exposing the existing `AnalyzerClient`/
@@ -402,9 +467,10 @@ Phase 1 (`docs/tasks/phase-1-repository-discovery.md`), the CLI & Reporting task
 (`docs/tasks/phase-3-graph-foundation.md`), CommonJS support, Angular/Vue/Python support
 (ADR-0009), the `ProjectIndexer` diagnostics channel (ADR-0008), wiring `code-analyzer scan` to the
 real `graphProjectIndexer`, the first `@code-analyzer/analyzers` rules
-(`docs/tasks/first-graph-analyzers.md`), and registering them against `scan`'s own registry are all
-**implemented and tested**. Phase 4 (Call Graph) now has a drafted task doc
-(`docs/tasks/phase-4-call-graph.md`) awaiting the human's direct go-ahead to begin implementation
-(see Current phase) — no code has been written for it yet. Also pending human review/decision: the
-CLI being wired into any CI/CD adapter or published to npm, and — if desired — Python Module Graph
-resolution or a third language scoped as their own follow-up tasks.
+(`docs/tasks/first-graph-analyzers.md`), registering them against `scan`'s own registry, coverage
+ingestion + quality analyzers (ADR-0010 Track A/B1), the `@code-analyzer/api` HTTP layer, and Phase 4
+(`docs/tasks/phase-4-call-graph.md`, Call Graph) are all **implemented and tested**. Phase 5 (Taint
+Graph) is **not** drafted — it needs its own explicit human go-ahead first, same as Phase 4 did
+(see Current phase). Also pending human review/decision: the CLI/API being wired into any CI/CD
+adapter or published, and — if desired — Python Module Graph resolution, Python Call Graph, or a
+third language, each scoped as their own follow-up tasks.

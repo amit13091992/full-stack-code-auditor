@@ -128,6 +128,10 @@ export function parsePythonFile(params: { fileId: FileId; path: string; content:
       isGenerator: false,
       isExported: exported,
       location: toLocation(fileId, path, node),
+      // Call-site extraction is JS/TS-only this phase (`docs/tasks/phase-4-call-graph.md`) — an
+      // empty array here is a truthful "not collected", matching how it's set for every Python
+      // function, not a guess about the function's real call behavior.
+      calls: [],
     };
   }
 

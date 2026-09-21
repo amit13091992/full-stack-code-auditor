@@ -1,5 +1,8 @@
 import ts from "typescript";
 import type {
+  CallApplyBindKind,
+  CallCalleeKind,
+  CallSite,
   ClassEntity,
   ClassId,
   ClassProperty,
@@ -83,6 +86,21 @@ export function parseFile(params: { fileId: FileId; path: string; content: strin
   const exports: ExportBinding[] = [];
   const localSymbolIdByName = new Map<string, SymbolId>();
 
+  // Call-site extraction (Phase 4 prerequisite, docs/tasks/phase-4-call-graph.md step 2). Kept as
+  // a bookkeeping side-channel rather than threading `calls` through `buildFunctionEntity`'s
+  // return value, because call sites are only fully known after the whole tree is walked (a
+  // function's own declaration is visited before its body's calls are). Every `FunctionEntity`
+  // gets `calls: []` at construction time and is patched with its real call sites in the final
+  // mapping step below.
+  const functionNodeById = new Map<ts.Node, FunctionId>();
+  const callsByFunctionId = new Map<FunctionId, CallSite[]>();
+
+  function recordCallSite(functionId: FunctionId, site: CallSite): void {
+    const existing = callsByFunctionId.get(functionId);
+    if (existing) existing.push(site);
+    else callsByFunctionId.set(functionId, [site]);
+  }
+
   function addSymbol(kind: SymbolKind, name: string, node: ts.Node, exported: boolean, typeText?: string): SymbolId {
     const offset = node.getStart(sourceFile);
     const id = toSymbolId(path, kind, name, offset);
@@ -111,7 +129,14 @@ export function parseFile(params: { fileId: FileId; path: string; content: strin
   }
 
   function buildFunctionEntity(
-    node: ts.FunctionDeclaration | ts.ArrowFunction | ts.MethodDeclaration | ts.ConstructorDeclaration | ts.GetAccessorDeclaration | ts.SetAccessorDeclaration,
+    node:
+      | ts.FunctionDeclaration
+      | ts.FunctionExpression
+      | ts.ArrowFunction
+      | ts.MethodDeclaration
+      | ts.ConstructorDeclaration
+      | ts.GetAccessorDeclaration
+      | ts.SetAccessorDeclaration,
     name: string,
     flavor: FunctionFlavor,
     symbolId: SymbolId,
@@ -122,8 +147,10 @@ export function parseFile(params: { fileId: FileId; path: string; content: strin
     const isAsync = hasModifier(node, ts.SyntaxKind.AsyncKeyword);
     const isGenerator = "asteriskToken" in node && Boolean(node.asteriskToken);
     const returnType = "type" in node ? node.type : undefined;
+    const id = toFunctionId(path, name, offset);
+    functionNodeById.set(node, id);
     return {
-      id: toFunctionId(path, name, offset),
+      id,
       symbolId,
       moduleId,
       ...(ownerClassId ? { ownerClassId } : {}),
@@ -135,6 +162,7 @@ export function parseFile(params: { fileId: FileId; path: string; content: strin
       isGenerator,
       isExported: exported,
       location: toLocation(fileId, path, sourceFile, node),
+      calls: [], // patched with real call sites once the whole tree is walked — see recordCallSite
     };
   }
 
@@ -430,6 +458,144 @@ export function parseFile(params: { fileId: FileId; path: string; content: strin
     }
   }
 
+  type FunctionLikeNode =
+    | ts.FunctionDeclaration
+    | ts.FunctionExpression
+    | ts.ArrowFunction
+    | ts.MethodDeclaration
+    | ts.ConstructorDeclaration
+    | ts.GetAccessorDeclaration
+    | ts.SetAccessorDeclaration;
+
+  function isFunctionLikeNode(node: ts.Node): node is FunctionLikeNode {
+    return (
+      ts.isFunctionDeclaration(node) ||
+      ts.isFunctionExpression(node) ||
+      ts.isArrowFunction(node) ||
+      ts.isMethodDeclaration(node) ||
+      ts.isConstructorDeclaration(node) ||
+      ts.isGetAccessor(node) ||
+      ts.isSetAccessor(node)
+    );
+  }
+
+  /** Best-effort name for a function-like node reached only through the call-site walk (never a top-level declaration, which already has a name by construction). */
+  function inferredNameOf(node: FunctionLikeNode): string {
+    if (ts.isConstructorDeclaration(node)) return "constructor";
+    if ((ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) && node.name) return node.name.text;
+    const parent = node.parent;
+    if ((ts.isVariableDeclaration(parent) || ts.isPropertyDeclaration(parent) || ts.isPropertyAssignment(parent)) && ts.isIdentifier(parent.name)) {
+      return parent.name.text;
+    }
+    return nameOf(node) ?? "<anonymous>";
+  }
+
+  function flavorOf(node: FunctionLikeNode): FunctionFlavor {
+    if (ts.isConstructorDeclaration(node)) return "constructor";
+    if (ts.isGetAccessor(node)) return "getter";
+    if (ts.isSetAccessor(node)) return "setter";
+    if (ts.isMethodDeclaration(node)) return "method";
+    if (ts.isArrowFunction(node)) return "arrow";
+    // ts.FunctionExpression has no dedicated FunctionFlavor value; closest existing shape.
+    return "function-declaration";
+  }
+
+  /**
+   * A function-like node not already registered by the declaration-focused walk above — e.g. a
+   * nested `function inner() {}`, a locally-assigned arrow/function expression, or an inline
+   * callback. Registered lazily here (not exported, since it's never a top-level declaration) so
+   * calls made from inside it attribute to *it*, not to whatever function encloses it.
+   */
+  function registerNestedFunctionEntity(node: FunctionLikeNode): FunctionId {
+    const name = inferredNameOf(node);
+    const offset = node.getStart(sourceFile);
+    const symbolId = toSymbolId(path, "function", name, offset);
+    symbols.push({
+      id: symbolId,
+      name,
+      kind: "function",
+      moduleId,
+      declarationLocation: toLocation(fileId, path, sourceFile, node),
+      visibility: "internal",
+      exported: false,
+    });
+    const entity = buildFunctionEntity(node, name, flavorOf(node), symbolId, false);
+    functions.push(entity);
+    return entity.id;
+  }
+
+  function isFunctionLikeArgument(arg: ts.Expression): boolean {
+    return ts.isArrowFunction(arg) || ts.isFunctionExpression(arg);
+  }
+
+  const CALL_APPLY_BIND_NAMES: ReadonlySet<string> = new Set(["call", "apply", "bind"]);
+
+  function buildCallSite(node: ts.CallExpression | ts.NewExpression): CallSite {
+    const isNewExpression = ts.isNewExpression(node);
+    const calleeExpr = node.expression;
+    const argsArray: readonly ts.Expression[] = node.arguments ? Array.from(node.arguments) : [];
+
+    let calleeKind: CallCalleeKind;
+    let calleeName: string | undefined;
+    let receiverText: string | undefined;
+    let isComputedKeyStatic: boolean | undefined;
+    let callApplyBindKind: CallApplyBindKind | undefined;
+
+    if (!isNewExpression && ts.isPropertyAccessExpression(calleeExpr) && CALL_APPLY_BIND_NAMES.has(calleeExpr.name.text)) {
+      calleeKind = "call-apply-bind";
+      callApplyBindKind = calleeExpr.name.text as CallApplyBindKind;
+      receiverText = calleeExpr.expression.getText(sourceFile);
+    } else if (ts.isPropertyAccessExpression(calleeExpr)) {
+      calleeKind = "member";
+      receiverText = calleeExpr.expression.getText(sourceFile);
+      calleeName = calleeExpr.name.text;
+    } else if (ts.isElementAccessExpression(calleeExpr)) {
+      calleeKind = "computed-member";
+      receiverText = calleeExpr.expression.getText(sourceFile);
+      const keyExpr = calleeExpr.argumentExpression;
+      if (ts.isStringLiteralLike(keyExpr)) {
+        isComputedKeyStatic = true;
+        calleeName = keyExpr.text;
+      } else {
+        isComputedKeyStatic = false;
+      }
+    } else if (ts.isIdentifier(calleeExpr)) {
+      calleeKind = "identifier";
+      calleeName = calleeExpr.text;
+    } else {
+      // Callee isn't identifier/member/computed-member/call-apply-bind shaped (e.g. calling the
+      // result of another call expression, an IIFE). Name intentionally omitted rather than
+      // guessed (ADR-0004) — the graph builder must treat this as unresolvable.
+      calleeKind = "identifier";
+    }
+
+    return {
+      calleeKind,
+      ...(calleeName !== undefined ? { calleeName } : {}),
+      ...(receiverText !== undefined ? { receiverText } : {}),
+      ...(isComputedKeyStatic !== undefined ? { isComputedKeyStatic } : {}),
+      ...(callApplyBindKind !== undefined ? { callApplyBindKind } : {}),
+      isNewExpression,
+      argumentCount: argsArray.length,
+      hasFunctionArgument: argsArray.some(isFunctionLikeArgument),
+      location: toLocation(fileId, path, sourceFile, node),
+    };
+  }
+
+  function collectCallSites(node: ts.Node, currentFunctionId: FunctionId | undefined): void {
+    if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+      if (currentFunctionId) recordCallSite(currentFunctionId, buildCallSite(node));
+    }
+
+    if (isFunctionLikeNode(node)) {
+      const functionId = functionNodeById.get(node) ?? registerNestedFunctionEntity(node);
+      ts.forEachChild(node, (child) => collectCallSites(child, functionId));
+      return;
+    }
+
+    ts.forEachChild(node, (child) => collectCallSites(child, currentFunctionId));
+  }
+
   function visitDynamicImports(node: ts.Node): void {
     if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
       const arg = node.arguments[0];
@@ -444,6 +610,12 @@ export function parseFile(params: { fileId: FileId; path: string; content: strin
     visitTopLevelStatement(statement);
   }
   visitDynamicImports(sourceFile);
+  collectCallSites(sourceFile, undefined);
+
+  const functionsWithCalls: FunctionEntity[] = functions.map((fn) => ({
+    ...fn,
+    calls: callsByFunctionId.get(fn.id) ?? [],
+  }));
 
   const module: Module = {
     id: moduleId,
@@ -453,5 +625,5 @@ export function parseFile(params: { fileId: FileId; path: string; content: strin
     declaredSymbols: symbols.map((s) => s.id),
   };
 
-  return { module, symbols, functions, classes, diagnostics };
+  return { module, symbols, functions: functionsWithCalls, classes, diagnostics };
 }
