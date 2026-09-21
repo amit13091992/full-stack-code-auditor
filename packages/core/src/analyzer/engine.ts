@@ -72,6 +72,7 @@ export class ScanEngine {
   async scan(options: ScanOptions = {}): Promise<ScanResult> {
     const scanId = randomUUID() as ScanId;
     const events = new SimpleEventEmitter();
+    if (options.onEvent) events.on(options.onEvent);
     const controller = new AbortController();
     if (options.signal?.aborted) controller.abort();
     options.signal?.addEventListener("abort", () => controller.abort());

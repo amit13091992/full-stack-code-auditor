@@ -8,6 +8,7 @@ import type {
   FindingId,
   ProjectId,
   ProjectModel,
+  ScanEvent,
 } from "../../packages/core/src/index.js";
 import { AnalyzerClient, ScanCancelledError } from "../../packages/core/src/index.js";
 
@@ -210,5 +211,32 @@ describe("AnalyzerClient / ScanEngine lifecycle", () => {
     controller.abort();
 
     await expect(client.scan({ signal: controller.signal })).rejects.toBeInstanceOf(ScanCancelledError);
+  });
+
+  it("notifies an external onEvent subscriber with the same events analyzers see (ADR-0012)", async () => {
+    const registry = new InMemoryRegistry();
+    registry.register(fixtureAnalyzer);
+
+    const client = new AnalyzerClient({
+      config: testConfig(),
+      registry,
+      strategies: {
+        discoverer: { discover: async () => emptyProject() },
+        indexer: { index: async (project) => ({ project, graphs: {}, diagnostics: [] }) },
+      },
+    });
+
+    const seen: ScanEvent[] = [];
+    await client.scan({ onEvent: (event) => seen.push(event) });
+
+    expect(seen.some((event) => event.type === "scan:started")).toBe(true);
+    expect(seen.filter((event) => event.type === "stage:started").map((event) => (event as { stage: string }).stage)).toEqual([
+      "discover",
+      "index",
+      "analyze",
+      "correlate",
+      "finalize",
+    ]);
+    expect(seen.some((event) => event.type === "scan:completed")).toBe(true);
   });
 });

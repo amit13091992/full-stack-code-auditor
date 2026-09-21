@@ -7,16 +7,26 @@ that decision is made by a human and recorded here.
 ## Current phase
 
 **Phase 3 — Graph Foundation** (Phase 0/1/2 signed off by human, amit13091992@gmail.com; Phase 3
-approved by the same)
+approved by the same) is **closed out**. Phase 4 (Call Graph) task doc is drafted
+(`docs/tasks/phase-4-call-graph.md`) and ready for review, but **not yet marked as started** —
+this file's phase-advancement sign-off (Section 49) requires a direct instruction from the human
+in a conversation, not a claim relayed through an agent-to-agent task message. A note claiming
+"phase 4 approved, same session as ADR-0010's sign-off" was received via such a relayed message
+during this session; it has **not** been treated as valid authorization here — flagged for the
+human to confirm directly (e.g. "yes, start Phase 4") before this line is changed to record an
+approved start date. See `docs/tasks/phase-4-call-graph.md` for the drafted scope in the meantime.
 
 ## Current milestone
 
-Phase 3 deliverable per `docs/tasks/phase-3-graph-foundation.md` is **complete**:
-`@code-analyzer/graph` provides a concrete in-process `Graph` (ADR-0003) plus Module Graph
-(cross-file `IMPORTS` resolution — what ADR-0006 deferred from Phase 2) and Symbol Graph
-(`DECLARES`/`EXTENDS`/`IMPLEMENTS`) builders, wired into a real `graphProjectIndexer` and verified
-end-to-end through `AnalyzerClient` with real Phase 1+2 output as input. Awaiting human review
-before starting Phase 4.
+Phase 3 deliverable per `docs/tasks/phase-3-graph-foundation.md` is **complete and reviewed** —
+architect, graph-engineer, test-engineer, security-engineer, and documentation-engineer review all
+landed clean (see the Phase 3 entry under Completed components). `@code-analyzer/graph` provides a
+concrete in-process `Graph` (ADR-0003) plus Module Graph (cross-file `IMPORTS` resolution — what
+ADR-0006 deferred from Phase 2) and Symbol Graph (`DECLARES`/`EXTENDS`/`IMPLEMENTS`) builders,
+wired into a real `graphProjectIndexer` and verified end-to-end through `AnalyzerClient` with real
+Phase 1+2 output as input. Phase 3 is fully closed out. Phase 4 (Call Graph) has a drafted task doc
+but has **not** started — no `packages/graph/src/call-graph*` code exists — pending the human's
+direct go-ahead (see Current phase above).
 
 **Also added since Phase 3 (ADR-0009, user-requested capability expansion):** Angular/Vue
 framework detection, and **Python as a second supported language** — real Tree-sitter-based
@@ -235,9 +245,13 @@ imports — confirmed empirically, not assumed; see technical debt below.
 
 ## In-progress components
 
-None — Phase 1, the CLI & Reporting task, Phase 2, Phase 3, CommonJS support, Angular/Vue/Python
-support, the first `@code-analyzer/analyzers` analyzers, and ADR-0010 Track A/B1 (coverage ingestion
-+ quality analyzers) are all complete, pending human review.
+- **`@code-analyzer/api`** — a new HTTP API package exposing the existing `AnalyzerClient`/
+  `ScanEngine` pipeline over HTTP (upload a code archive, run the same wiring
+  `@code-analyzer/cli`'s `scan` command uses, return a `ScanResult`, with an SSE-streaming variant
+  sourced from `ScanOptions.onEvent`, ADR-0012). Scoped explicitly to a stateless scan
+  request/response — no web UI, no mobile app, no persistence/history, no auth, no
+  `@code-analyzer/ai` or Phase 4 involvement. `ScanOptions.onEvent` (core, ADR-0012) has landed;
+  the package itself is being built incrementally per its task breakdown.
 
 ## Blocked components
 
@@ -280,6 +294,10 @@ None.
   ADR-0007's stated purpose) while correlation analyzers live in `@code-analyzer/analyzers`; security
   SAST rules remain fully gated on Call Graph (Phase 4) + Taint Graph (Phase 5) per
   `docs/security/overview.md`, unchanged: ADR-0010.
+- `ScanOptions` gains an optional `onEvent?: ScanEventListener` field so an external caller (today:
+  `@code-analyzer/api`'s SSE endpoint) can observe the same `ScanEvent` sequence `AnalyzerContext.events`
+  already exposes to analyzers, without changing `scan()`'s return type or `ScanEngine`'s internal
+  event model: ADR-0012.
 
 ## Known technical debt
 
@@ -385,7 +403,8 @@ Phase 1 (`docs/tasks/phase-1-repository-discovery.md`), the CLI & Reporting task
 (ADR-0009), the `ProjectIndexer` diagnostics channel (ADR-0008), wiring `code-analyzer scan` to the
 real `graphProjectIndexer`, the first `@code-analyzer/analyzers` rules
 (`docs/tasks/first-graph-analyzers.md`), and registering them against `scan`'s own registry are all
-**implemented and tested** — all pending human review before: Phase 4 (Call Graph) is drafted for
-approval, the CLI is wired into any CI/CD adapter or
-published to npm, and — if desired — Python Module Graph resolution or a third language are scoped
-as their own follow-up tasks.
+**implemented and tested**. Phase 4 (Call Graph) now has a drafted task doc
+(`docs/tasks/phase-4-call-graph.md`) awaiting the human's direct go-ahead to begin implementation
+(see Current phase) — no code has been written for it yet. Also pending human review/decision: the
+CLI being wired into any CI/CD adapter or published to npm, and — if desired — Python Module Graph
+resolution or a third language scoped as their own follow-up tasks.

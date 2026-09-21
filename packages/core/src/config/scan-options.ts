@@ -1,5 +1,6 @@
 import type { CoverageModel } from "../domain/coverage.js";
 import type { ScanMode, ScanProfile } from "../domain/scan.js";
+import type { ScanEventListener } from "../events/events.js";
 
 export interface IgnoreConfig {
   readonly patterns: readonly string[];
@@ -48,4 +49,6 @@ export interface ScanOptions {
   readonly signal?: AbortSignal;
   /** Pre-ingested test coverage (`packages/integrations/src/coverage/*`), surfaced to analyzers via `AnalyzerContext.coverage`. */
   readonly coverage?: CoverageModel;
+  /** External subscriber for scan lifecycle events (e.g. an API layer streaming progress over SSE). ADR-0012. */
+  readonly onEvent?: ScanEventListener;
 }
