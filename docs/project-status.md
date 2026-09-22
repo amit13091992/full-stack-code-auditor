@@ -14,12 +14,23 @@ complete: `AnalyzerContext.graphs.callGraph` was already additive (no ADR needed
 call-site extraction, `buildCallGraph` and its `graphProjectIndexer` wiring, fixtures, unit tests,
 an end-to-end test, and a clean `pnpm build`/`typecheck`/`test`/`lint` (149/149 passing).
 
-**Phase 5 — Taint Graph** (human go-ahead: "record the go-ahead and start the EdgeRelationType
-ADR", amit13091992@gmail.com, 2026-09-22) is **scoped, not yet implemented**. See
-`docs/tasks/phase-5-taint-graph.md` for the task doc (11-step checklist). Per that doc's own
-checklist step 1, implementation does not start until the `EdgeRelationType` ADR (whether to add a
-new `"FLOWS_TO"` value vs. reusing `"CALLS"`, and where reconstructed `DataFlow[]` live) is written
-and reviewed.
+**Phase 5 — Taint Graph** (go-ahead: "record the go-ahead and start the EdgeRelationType ADR",
+amit13091992@gmail.com, 2026-09-22; closed out: "close out phase 5", same human, 2026-09-22) is
+**closed out**. See `docs/tasks/phase-5-taint-graph.md` for the task scope — checklist steps 1-9 are
+complete: ADR-0014 accepted (`EdgeRelationType` gains `"FLOWS_TO"`; `DataFlow[]` derived on demand,
+no new `AnalyzerContext` field), the fixed source/sink/sanitizer signature table
+(`packages/graph/src/taint-signatures.ts`), `buildTaintGraph` (`packages/graph/src/taint-graph.ts`)
+reusing the Call Graph's `CALLS` edges/`findPaths` for reachability and certainty, its
+`graphProjectIndexer` wiring (`AnalyzerContext.graphs.taintGraph` now populated), fixtures under
+`fixtures/graph/taint-links/`, unit tests, an end-to-end test through a real `AnalyzerClient`, and a
+clean `pnpm build`/`typecheck`/`test`/`lint` (175/175 passing).
+
+**Checklist step 11 — the first real `security/*` rule (e.g. SQL/command injection) — is
+explicitly out of scope for this closure.** It is a separate task gated on Section 47's full
+enhanced review path (implementation → unit tests → security fixtures → regression tests →
+architecture review → security review) and has not been started. Phase 5 as closed here delivers
+the Taint Graph plumbing only, same precedent as Phase 4 closing before any analyzer consumed
+`callGraph`.
 
 **Design decisions confirmed at Phase 4 close-out** (both flagged by the implementing agents as
 worth a second look, both accepted as-is, no rework needed):
@@ -313,6 +324,26 @@ imports — confirmed empirically, not assumed; see technical debt below.
   `AnalyzerClient`. `pnpm build`/`typecheck`/`test`/`lint` clean, 149/149 tests passing (up from
   117). Phase 5 (Taint Graph) remains undrafted, per this file's phase-advancement rule.
 
+- **Phase 5 — Taint Graph** (`docs/tasks/phase-5-taint-graph.md`, ADR-0014): `EdgeRelationType`
+  gains `"FLOWS_TO"`; a fixed, named source/sink/sanitizer signature table
+  (`packages/graph/src/taint-signatures.ts`) matches recognized `CallSite` shapes (`process.env`,
+  `req.query`/`params`/`body`/`headers`/`cookies`, `fs.readFile*` as sources; `eval`,
+  `child_process.exec`/`execSync`, a db-client `.query(...)`, a template `.render(...)` as sinks;
+  `escapeHtml`/`parseInt`/`mysql.escape` as sanitizers); `buildTaintGraph`
+  (`packages/graph/src/taint-graph.ts`) reconstructs argument-position source→sink flows by reusing
+  the Call Graph's `CALLS` edges and `findPaths` (no new resolution logic), marking a flow
+  `sanitized: true` when a recognized sanitizer sits on the path and setting `certainty` to the
+  weakest `CALLS` edge certainty along it — an unresolved/dynamic path still produces a `FLOWS_TO`
+  edge with reduced certainty rather than being dropped (ADR-0004). Wired into `graphProjectIndexer`,
+  populating `AnalyzerContext.graphs.taintGraph` for the first time. Fixtures under
+  `fixtures/graph/taint-links/` (unsanitized flow, sanitized flow, flow through an unknown `CALLS`
+  edge, a safe-sink false-positive case, a no-source/no-sink case), unit tests running the real
+  parser → Call Graph → Taint Graph pipeline over each fixture, and an end-to-end test through a
+  real `AnalyzerClient` with a placeholder analyzer that only reports the `FLOWS_TO` edge count (no
+  vulnerability judgment). `pnpm build`/`typecheck`/`test`/`lint` clean, 175/175 tests passing (up
+  from 169). **No `security/*` rule was implemented** — that is explicitly out of scope for this
+  phase's closure, gated on Section 47's full review path, and is the next separate task.
+
 - **`ScanProfile` now actually filters which analyzers run** (ADR-0013, user-reported bug fix:
   `--profile minimal` and `--profile full`/`enterprise` gave byte-identical results because
   `ScanEngine.scan()`'s analyzer-selection branch ran `this.registry.list()` unconditionally
@@ -499,10 +530,12 @@ Phase 1 (`docs/tasks/phase-1-repository-discovery.md`), the CLI & Reporting task
 (ADR-0009), the `ProjectIndexer` diagnostics channel (ADR-0008), wiring `code-analyzer scan` to the
 real `graphProjectIndexer`, the first `@code-analyzer/analyzers` rules
 (`docs/tasks/first-graph-analyzers.md`), registering them against `scan`'s own registry, coverage
-ingestion + quality analyzers (ADR-0010 Track A/B1), the `@code-analyzer/api` HTTP layer, and Phase 4
-(`docs/tasks/phase-4-call-graph.md`, Call Graph) are all **implemented and tested**. Phase 5 (Taint
-Graph, `docs/tasks/phase-5-taint-graph.md`) has human go-ahead and is scoped, with implementation
-gated on its `EdgeRelationType` ADR landing first (see Current phase). Also pending human
-review/decision: the CLI/API being wired into any CI/CD
+ingestion + quality analyzers (ADR-0010 Track A/B1), the `@code-analyzer/api` HTTP layer, Phase 4
+(`docs/tasks/phase-4-call-graph.md`, Call Graph), and Phase 5 (`docs/tasks/phase-5-taint-graph.md`,
+Taint Graph, ADR-0014) are all **implemented and tested**. The first `security/*` rule (SQL
+injection, command injection, etc.) built on top of the Taint Graph is **not started** — it needs
+its own explicit human go-ahead and follows Section 47's full enhanced review path, same as any
+taint-touching change (see Current phase). Also pending human review/decision: the CLI/API being
+wired into any CI/CD
 adapter or published, and — if desired — Python Module Graph resolution, Python Call Graph, or a
 third language, each scoped as their own follow-up tasks.
