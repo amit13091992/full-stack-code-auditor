@@ -35,14 +35,24 @@ Repository -> ProjectModel -> AST/Symbol Model -> Graphs (module/dependency/call
 - **Real parsing, not regex** — the actual TypeScript compiler for JS/TS (ESM and CommonJS) into
   functions, classes, imports, and exports; Tree-sitter for Python into the same shapes.
 - **A real, queryable graph** — a Module Graph (cross-file `IMPORTS` resolution), a Symbol Graph
-  (`DECLARES`/`EXTENDS`/`IMPLEMENTS`), and a Call Graph (`CALLS` edges resolved from real call
-  sites, with `EdgeCertainty` — `direct`/`resolved`/`inferred`/`dynamic`/`unknown` — rather than a
-  false yes/no) built over the parsed output, not just a flat file list.
-- **Eight built-in analyzers** — architecture (`circular-import`, `unresolved-import`), quality
+  (`DECLARES`/`EXTENDS`/`IMPLEMENTS`), a Call Graph (`CALLS` edges resolved from real call sites,
+  with `EdgeCertainty` — `direct`/`resolved`/`inferred`/`dynamic`/`unknown` — rather than a false
+  yes/no), and a Taint Graph (`FLOWS_TO` edges reconstructing source-to-sink data flow over the
+  Call Graph, e.g. `req.query` reaching a SQL call) built over the parsed output, not just a flat
+  file list.
+- **Nine built-in analyzers** — architecture (`circular-import`, `unresolved-import`), quality
   (`unused-export`, `cyclomatic-complexity`, `duplication`, `maintainability-index`,
-  `lint-style-rules`), and secrets (`pattern-scan`, real regex-based detection for AWS/GitHub/
-  Google/Slack/Stripe keys and private-key blocks) — each backed by real `Evidence` (concrete
-  proof, not just a rule description).
+  `lint-style-rules`), secrets (`pattern-scan`, real regex-based detection for AWS/GitHub/
+  Google/Slack/Stripe keys and private-key blocks), and the first real security/SAST rule,
+  `security/sql-injection` (walks the Taint Graph for untrusted input — `req.query`/`params`/
+  `body`/`headers`/`cookies`, `process.env`, `fs.readFile*` — reaching a SQL sink: a raw
+  `.query(...)` call or Prisma's `$queryRawUnsafe`/`$executeRawUnsafe`; `critical` severity if
+  unsanitized, `low` if a recognized sanitizer sits on the path, confidence scaled by how certain
+  the underlying call resolution is) — each backed by real `Evidence` (concrete proof, not just a
+  rule description). `security/sql-injection` recognizes a fixed, deliberately small set of
+  source/sink/sanitizer shapes (see `packages/graph/src/taint-signatures.ts`) — it always emits an
+  `info` diagnostic stating this, since zero findings means "no recognized pattern matched," never
+  "verified safe."
 - **Test coverage ingestion** — feed an existing LCOV / Istanbul (`coverage-final.json`) /
   coverage.py report in with `--coverage <path>` and quality analyzers can see it; a file the
   report never mentions is reported as `unknown` coverage, never conflated with 0%. `code-analyzer`
@@ -100,25 +110,28 @@ codegraph-scan export --format sarif --in report.json --out report.sarif
 ```
 
 `scan` runs real discovery, parsing, and graph-building against whatever repo you point it at, runs
-the eight built-in analyzers over the resulting graph, and produces a schema-versioned
-`ScanResult`.
+whichever of the nine built-in analyzers your `--profile` selects over the resulting graph, and
+produces a schema-versioned `ScanResult`.
 
 | Flag | Values | Default |
 |---|---|---|
 | `--format` | `json`, `sarif`, `html` | `json` |
-| `--profile` | `minimal`, `standard`, `security`, `full`, `enterprise` | `minimal` |
+| `--profile` | `minimal`, `standard`, `security`, `full`, `enterprise` | `standard` |
+| `--out` | path to write the report to | stdout |
+| `--coverage` | path to an LCOV / Istanbul / coverage.py report (format auto-detected) | none — coverage-aware analyzers see no data |
 
 `--profile` controls which `AnalyzerCategory` values run (ADR-0013) — not every profile runs every
 built-in analyzer:
 
 | Profile | Categories run | What that means today |
 |---|---|---|
-| `minimal` | `architecture` | `circular-import`, `unresolved-import` only |
-| `standard` | `architecture`, `quality` | adds `unused-export`, `cyclomatic-complexity`, `duplication`, `maintainability-index`, `lint-style-rules` |
-| `security` | `security`, `secrets` | `secrets/pattern-scan` only — no `security`-category (SAST) rule exists yet |
-| `full` / `enterprise` | every category | all 8 shipped analyzers; identical to each other today |
-| `--out` | path to write the report to | stdout |
-| `--coverage` | path to an LCOV / Istanbul / coverage.py report (format auto-detected) | none — coverage-aware analyzers see no data |
+| `minimal` | `architecture` | `circular-import`, `unresolved-import` only — the fastest, purely structural check |
+| `standard` (default) | `architecture`, `quality` | adds `unused-export`, `cyclomatic-complexity`, `duplication`, `maintainability-index`, `lint-style-rules` |
+| `security` | `security`, `secrets` | `secrets/pattern-scan` and `security/sql-injection` |
+| `full` / `enterprise` | every category | all 9 shipped analyzers; identical to each other today |
+
+Use `--profile full` (or `security`) to get `security/sql-injection` findings — `minimal`/
+`standard` don't run it.
 
 ## HTTP API (in progress)
 
@@ -143,11 +156,13 @@ curl http://localhost:3000/v1/health
 ## Sample report
 
 The HTML report groups findings into collapsible, per-category sections with a sidebar you can
-jump between, live severity/rule filters, full-text search, and a real source-code snippet
-(with the offending line highlighted) pulled straight from your repository for each finding:
+jump between, live severity/rule filters, full-text search, a real source-code snippet (with the
+offending line highlighted) pulled straight from your repository for each finding, and a
+Diagnostics section (parse errors, skipped files, and scope disclosures like
+`security/sql-injection`'s "fixed signature list" notice):
 
 ```bash
-codegraph-scan scan . --format html --out report.html && open report.html
+codegraph-scan scan . --profile full --format html --out report.html && open report.html
 ```
 
 ## Packages
@@ -162,9 +177,9 @@ real analysis engine instead of drifting apart. See
 | `@code-analyzer/core` | Domain model, contracts, and the `ScanEngine` lifecycle. Zero dependencies on other workspace packages, no analysis logic. | Implemented |
 | `@code-analyzer/project-model` | Repository discovery -> normalized `ProjectModel`. | Implemented |
 | `@code-analyzer/parser` | AST / semantic source model — TypeScript Compiler API for JS/TS incl. CommonJS (ADR-0006), Tree-sitter for Python (ADR-0009). | Implemented |
-| `@code-analyzer/graph` | Module Graph, Symbol Graph, and Call Graph (`CALLS` edges from real call-site resolution), wired into a real `graphProjectIndexer`. | Implemented — taint graph (Phase 5) is next |
-| `@code-analyzer/analyzers` | Analysis rules: circular-import, unresolved-import, unused-export, cyclomatic-complexity, duplication, maintainability-index, lint-style-rules, secrets pattern-scan. | 8 rules shipped — SAST/injection/authn/authz rules blocked on the taint graph (Phase 5); see [ADR-0010](docs/decisions/ADR-0010-security-quality-coverage-subsystems.md) |
-| `@code-analyzer/cli` | `scan`/`export` commands, the eight built-in analyzers wired against an in-memory registry, an opt-in `--coverage` report flag, plus JSON/SARIF/HTML report exporters. | Implemented |
+| `@code-analyzer/graph` | Module Graph, Symbol Graph, Call Graph (`CALLS` edges from real call-site resolution), and Taint Graph (`FLOWS_TO` edges reconstructing source-to-sink flow over the Call Graph, ADR-0014), wired into a real `graphProjectIndexer`. | Implemented |
+| `@code-analyzer/analyzers` | Analysis rules: circular-import, unresolved-import, unused-export, cyclomatic-complexity, duplication, maintainability-index, lint-style-rules, secrets pattern-scan, and the first SAST rule — security/sql-injection. | 9 rules shipped — XSS/command-injection/SSRF/IDOR/authn/authz rules are natural follow-ups on the same Taint Graph, not yet built; see [ADR-0010](docs/decisions/ADR-0010-security-quality-coverage-subsystems.md) |
+| `@code-analyzer/cli` | `scan`/`export` commands, the nine built-in analyzers wired against an in-memory registry, an opt-in `--coverage` report flag, plus JSON/SARIF/HTML report exporters. | Implemented |
 | `@code-analyzer/api` | HTTP API exposing the same `AnalyzerClient`/`ScanEngine` pipeline over HTTP — upload a code archive, get back a `ScanResult`, optional SSE streaming (ADR-0012). | In progress — stateless scan endpoint only, no web UI/auth/persistence |
 | `@code-analyzer/engines` | Engine-level composition, finding correlation, risk scoring. | Not started |
 | `@code-analyzer/integrations` | External tool normalization (SARIF, CodeQL, Semgrep, ...) and CI/CD adapters. LCOV/Istanbul/coverage.py test-coverage report parsing (`src/coverage/`) is its first real content. | Coverage ingestion implemented — CI/CD and other external-tool adapters not started |
@@ -173,12 +188,15 @@ real analysis engine instead of drifting apart. See
 
 ## Roadmap
 
-Not built yet: the taint graph and the SAST rules that need it (SQLi, XSS, SSRF, IDOR, authn/authz),
-coupling/dead-code quality rules that need call-graph reachability, coverage×taint correlation, and
-Python cross-file import resolution (Python parses per-file but doesn't yet link `import`s across
-files). The Call Graph (Phase 4) is implemented — see Features above. Every phase is signed off by
-a human before the next one starts — see [`docs/project-status.md`](docs/project-status.md) for the
-exact, up-to-date state, and
+The Call Graph (Phase 4) and Taint Graph (Phase 5) are implemented, and the first SAST rule
+(`security/sql-injection`) is shipped on top of the Taint Graph — see Features above. Not built
+yet: further SAST rules on the same Taint Graph (XSS via the `html-render` sink, command injection
+via `shell-command`/`eval`, SSRF, IDOR, authn/authz), coupling/dead-code quality rules that need
+call-graph reachability, coverage×taint correlation, and Python cross-file import resolution
+(Python parses per-file but doesn't yet link `import`s across files, so there's no Python Call
+Graph or Taint Graph either). Every phase and every security-relevant rule goes through this
+project's own review path and is signed off by a human before it ships — see
+[`docs/project-status.md`](docs/project-status.md) for the exact, up-to-date state, and
 [ADR-0010](docs/decisions/ADR-0010-security-quality-coverage-subsystems.md) /
 [the tracker](docs/tasks/security-quality-coverage-modules.md) for what's planned for security,
 quality, and coverage specifically.

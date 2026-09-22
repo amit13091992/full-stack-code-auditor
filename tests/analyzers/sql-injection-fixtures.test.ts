@@ -67,4 +67,28 @@ describe("security/sql-injection fixtures (end-to-end)", () => {
 
     expect(result.findings).toHaveLength(0);
   });
+
+  it("flags a true-positive unsanitized req.query -> prisma.$queryRawUnsafe flow as one critical finding", async () => {
+    const context = await buildAnalyzerContext(path.join(FIXTURES_ROOT, "prisma-raw-query"));
+    const result = await sqlInjectionAnalyzer.analyze(context);
+
+    expect(result.findings).toHaveLength(1);
+    const finding = result.findings[0]!;
+    expect(finding.ruleId).toBe("security/sql-injection");
+    expect(finding.category).toBe("security");
+    expect(finding.severity).toBe("critical");
+    expect(finding.status).toBe("detected");
+    expect(finding.cwe).toBe("CWE-89");
+    expect(finding.owasp).toBe("A03:2021");
+    expect(finding.confidence).toBeGreaterThanOrEqual(0.7);
+    expect(finding.confidence).toBeLessThan(1);
+    expect(finding.evidenceIds.length).toBe(2);
+  });
+
+  it("false-positive guard: req.query -> prisma.user.findMany (ordinary parameterized ORM call) produces zero findings", async () => {
+    const context = await buildAnalyzerContext(path.join(FIXTURES_ROOT, "prisma-orm-safe"));
+    const result = await sqlInjectionAnalyzer.analyze(context);
+
+    expect(result.findings).toHaveLength(0);
+  });
 });

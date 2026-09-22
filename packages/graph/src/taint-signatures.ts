@@ -126,6 +126,30 @@ export const TAINT_SIGNATURES: readonly TaintSignature[] = [
     taintKind: "sql",
     match: { calleeKind: "member", calleeName: "query", receiverTextEndsWithAny: ["db", "pool", "connection", "client", "conn"] },
   },
+  /**
+   * Prisma's raw-query escape hatches. `$queryRawUnsafe`/`$executeRawUnsafe` take a plain string
+   * with no parameterization at all -- genuinely SQL-injectable if built from unsanitized input,
+   * regardless of receiver shape (a Prisma client instance is commonly named `prisma`, but also
+   * `db`/`client`/etc.; the method names themselves are distinctive enough -- `$queryRawUnsafe`/
+   * `$executeRawUnsafe` are not realistically used for anything unrelated -- that a receiver check
+   * would only risk false negatives on a differently-named client for no false-positive benefit).
+   *
+   * `$queryRaw`/`$executeRaw` are deliberately NOT included here. Called as a tagged template
+   * literal (`` prisma.$queryRaw`...${x}` ``) they are parameterized safely by Prisma; called as a
+   * plain function with a manually concatenated string they are not. `CallSite`
+   * (`packages/core/src/domain/function.ts`) records no field distinguishing a tagged-template call
+   * from an ordinary call expression, so there is no structural way to tell the safe form from the
+   * dangerous one from parsed data today. Per Section 7/ADR-0004, guessing either way would risk
+   * false positives (flagging safe tagged-template usage) or a silent false-negative gap presented
+   * as coverage -- this is a stated, deliberate omission, not an oversight. Revisit if `CallSite`
+   * ever gains a tagged-template-call flag.
+   */
+  {
+    name: "prisma.$queryRawUnsafe",
+    kind: "sink",
+    taintKind: "sql",
+    match: { calleeKind: "member", calleeNames: ["$queryRawUnsafe", "$executeRawUnsafe"] },
+  },
   {
     name: "template.render",
     kind: "sink",

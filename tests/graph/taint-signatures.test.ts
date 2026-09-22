@@ -87,6 +87,31 @@ describe("TAINT_SIGNATURES", () => {
     expect(matchesCallSite(site({ calleeKind: "identifier", calleeName: "escape" }), find("mysql.escape").match)).toBe(false);
   });
 
+  it("prisma.$queryRawUnsafe/$executeRawUnsafe match regardless of receiver name, but ordinary CRUD calls do not", () => {
+    const sig = find("prisma.$queryRawUnsafe");
+    expect(matchesCallSite(site({ calleeKind: "member", receiverText: "prisma", calleeName: "$queryRawUnsafe" }), sig.match)).toBe(true);
+    expect(matchesCallSite(site({ calleeKind: "member", receiverText: "prisma", calleeName: "$executeRawUnsafe" }), sig.match)).toBe(true);
+    expect(matchesCallSite(site({ calleeKind: "member", receiverText: "this.prisma", calleeName: "$queryRawUnsafe" }), sig.match)).toBe(true);
+    // Ordinary parameterized ORM calls must never be flagged as SQL sinks (false-positive guard).
+    expect(matchesCallSite(site({ calleeKind: "member", receiverText: "prisma.user", calleeName: "findMany" }), sig.match)).toBe(false);
+    expect(matchesCallSite(site({ calleeKind: "member", receiverText: "prisma.user", calleeName: "findUnique" }), sig.match)).toBe(false);
+    expect(matchesCallSite(site({ calleeKind: "member", receiverText: "prisma.user", calleeName: "create" }), sig.match)).toBe(false);
+  });
+
+  it("prisma.$queryRaw/$executeRaw (tagged-template-safe form) are deliberately not in the sink table", () => {
+    // No signature named "prisma.$queryRaw" exists: CallSite has no way to distinguish the safe
+    // tagged-template call from a dangerous plain-call-expression built from a raw string, so
+    // neither form is recognized (documented gap, not a silent omission).
+    expect(TAINT_SIGNATURES.some((s) => s.name.includes("$queryRaw") && !s.name.includes("Unsafe"))).toBe(false);
+    expect(TAINT_SIGNATURES.some((s) => s.name.includes("$executeRaw") && !s.name.includes("Unsafe"))).toBe(false);
+    expect(
+      matchesCallSite(
+        site({ calleeKind: "member", receiverText: "prisma", calleeName: "$queryRaw" }),
+        find("prisma.$queryRawUnsafe").match,
+      ),
+    ).toBe(false);
+  });
+
   it("every entry declares a taintKind for sources/sinks and none for sanitizers", () => {
     for (const entry of TAINT_SIGNATURES) {
       if (entry.kind === "sanitizer") expect(entry.taintKind).toBeUndefined();
