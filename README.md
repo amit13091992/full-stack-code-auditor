@@ -107,6 +107,16 @@ the eight built-in analyzers over the resulting graph, and produces a schema-ver
 |---|---|---|
 | `--format` | `json`, `sarif`, `html` | `json` |
 | `--profile` | `minimal`, `standard`, `security`, `full`, `enterprise` | `minimal` |
+
+`--profile` controls which `AnalyzerCategory` values run (ADR-0013) — not every profile runs every
+built-in analyzer:
+
+| Profile | Categories run | What that means today |
+|---|---|---|
+| `minimal` | `architecture` | `circular-import`, `unresolved-import` only |
+| `standard` | `architecture`, `quality` | adds `unused-export`, `cyclomatic-complexity`, `duplication`, `maintainability-index`, `lint-style-rules` |
+| `security` | `security`, `secrets` | `secrets/pattern-scan` only — no `security`-category (SAST) rule exists yet |
+| `full` / `enterprise` | every category | all 8 shipped analyzers; identical to each other today |
 | `--out` | path to write the report to | stdout |
 | `--coverage` | path to an LCOV / Istanbul / coverage.py report (format auto-detected) | none — coverage-aware analyzers see no data |
 

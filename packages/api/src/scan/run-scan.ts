@@ -23,7 +23,12 @@ export async function runScan(options: RunScanOptions): Promise<ScanResult> {
 
   const config: AnalyzerConfig = {
     root: options.root,
-    profile: "minimal",
+    // "full" (not "minimal"): the API takes no profile from the request today, and this package's
+    // stated intent is running the same built-in analyzer set the CLI's default invocation runs —
+    // "minimal" would now only run the architecture category since profile->category filtering
+    // landed (ADR-0013), silently dropping quality/secrets findings this package's own tests
+    // (tests/api/scan-route.test.ts) already assert on.
+    profile: "full",
     ignore: { patterns: [], respectGitignore: true },
     incremental: { enabled: false },
     sandbox: { enabled: true, networkAccess: false },

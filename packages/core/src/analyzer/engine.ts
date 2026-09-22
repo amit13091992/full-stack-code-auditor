@@ -13,6 +13,7 @@ import { SCAN_RESULT_SCHEMA_VERSION } from "../serialization/scan-result.js";
 import type { Analyzer, AnalyzerRegistry } from "./analyzer.js";
 import type { AnalyzerContext } from "./context.js";
 import type { PipelineStrategies } from "./pipeline.js";
+import { PROFILE_CATEGORIES } from "./profiles.js";
 
 class SimpleEventEmitter implements ScanEventEmitter {
   private readonly listeners = new Set<ScanEventListener>();
@@ -105,10 +106,16 @@ export class ScanEngine {
 
       this.checkCancelled(signal);
       events.emit({ type: "stage:started", scanId, stage: "analyze" });
+      // An explicit `analyzers` id list (from ScanOptions or AnalyzerConfig) always wins — a
+      // caller naming specific analyzer ids is opting out of profile-based selection entirely.
+      // Otherwise `profile` decides which AnalyzerCategory values run (ADR-0013); previously this
+      // branch was `this.registry.list()` unconditionally, so every profile ran every registered
+      // analyzer regardless of category.
       const selectedIds = options.analyzers ?? this.config.analyzers;
+      const allowedCategories = PROFILE_CATEGORIES[profile];
       const analyzers: readonly Analyzer[] = selectedIds
         ? selectedIds.map((id) => this.registry.get(id)).filter((a): a is Analyzer => a !== undefined)
-        : this.registry.list();
+        : this.registry.list().filter((analyzer) => allowedCategories.includes(analyzer.capabilities.category));
 
       const context: AnalyzerContext = {
         scanId,

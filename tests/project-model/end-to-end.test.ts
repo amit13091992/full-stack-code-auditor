@@ -64,10 +64,12 @@ const generatedFileAnalyzer: Analyzer = {
   },
 };
 
+// "standard" (not "minimal") — generatedFileAnalyzer is `category: "quality"`, and "minimal" only
+// runs `architecture` since profile->category filtering landed (ADR-0013).
 function configFor(root: string): AnalyzerConfig {
   return {
     root,
-    profile: "minimal",
+    profile: "standard",
     ignore: { patterns: [], respectGitignore: true },
     incremental: { enabled: false },
     sandbox: { enabled: true, networkAccess: false },

@@ -82,10 +82,16 @@ const fixtureAnalyzer: Analyzer = {
   },
 };
 
+/**
+ * `profile: "full"` — these lifecycle tests exercise `fixtureAnalyzer` (`category: "quality"`)
+ * and predate profile->category filtering (ADR-0013); `"full"` runs every category so this stays
+ * a lifecycle fixture, not a profile-filtering one. See the "profile->category filtering" describe
+ * block below for tests of the filtering behavior itself.
+ */
 function testConfig(): AnalyzerConfig {
   return {
     root: "/tmp/fixture",
-    profile: "minimal",
+    profile: "full",
     ignore: { patterns: [], respectGitignore: true },
     incremental: { enabled: false },
     sandbox: { enabled: true, networkAccess: false },
@@ -238,5 +244,76 @@ describe("AnalyzerClient / ScanEngine lifecycle", () => {
       "finalize",
     ]);
     expect(seen.some((event) => event.type === "scan:completed")).toBe(true);
+  });
+});
+
+describe("ScanEngine profile -> category filtering (ADR-0013)", () => {
+  const architectureAnalyzer: Analyzer = {
+    ...fixtureAnalyzer,
+    id: "test/architecture",
+    capabilities: { category: "architecture" },
+  };
+  const qualityAnalyzer: Analyzer = {
+    ...fixtureAnalyzer,
+    id: "test/quality",
+    capabilities: { category: "quality" },
+  };
+  const secretsAnalyzer: Analyzer = {
+    ...fixtureAnalyzer,
+    id: "test/secrets",
+    capabilities: { category: "secrets" },
+  };
+
+  function registryWithAll(): InMemoryRegistry {
+    const registry = new InMemoryRegistry();
+    registry.register(architectureAnalyzer);
+    registry.register(qualityAnalyzer);
+    registry.register(secretsAnalyzer);
+    return registry;
+  }
+
+  function clientWithProfile(profile: AnalyzerConfig["profile"]): AnalyzerClient {
+    return new AnalyzerClient({
+      config: { ...testConfig(), profile },
+      registry: registryWithAll(),
+      strategies: {
+        discoverer: { discover: async () => emptyProject() },
+        indexer: { index: async (project) => ({ project, graphs: {}, diagnostics: [] }) },
+      },
+    });
+  }
+
+  it("minimal runs only architecture analyzers", async () => {
+    const result = await clientWithProfile("minimal").scan();
+    expect(result.scan.analyzersRun).toEqual(["test/architecture"]);
+  });
+
+  it("standard runs architecture and quality analyzers, not secrets", async () => {
+    const result = await clientWithProfile("standard").scan();
+    expect(result.scan.analyzersRun.sort()).toEqual(["test/architecture", "test/quality"]);
+  });
+
+  it("security runs secrets analyzers, not architecture or quality", async () => {
+    const result = await clientWithProfile("security").scan();
+    expect(result.scan.analyzersRun).toEqual(["test/secrets"]);
+  });
+
+  it("full runs every registered analyzer regardless of category", async () => {
+    const result = await clientWithProfile("full").scan();
+    expect(result.scan.analyzersRun.sort()).toEqual(["test/architecture", "test/quality", "test/secrets"]);
+  });
+
+  it("an explicit analyzers id list bypasses profile filtering entirely", async () => {
+    const client = new AnalyzerClient({
+      config: { ...testConfig(), profile: "minimal" },
+      registry: registryWithAll(),
+      strategies: {
+        discoverer: { discover: async () => emptyProject() },
+        indexer: { index: async (project) => ({ project, graphs: {}, diagnostics: [] }) },
+      },
+    });
+
+    const result = await client.scan({ analyzers: ["test/secrets"] });
+    expect(result.scan.analyzersRun).toEqual(["test/secrets"]);
   });
 });

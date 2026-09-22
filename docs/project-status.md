@@ -308,6 +308,24 @@ imports — confirmed empirically, not assumed; see technical debt below.
   `AnalyzerClient`. `pnpm build`/`typecheck`/`test`/`lint` clean, 149/149 tests passing (up from
   117). Phase 5 (Taint Graph) remains undrafted, per this file's phase-advancement rule.
 
+- **`ScanProfile` now actually filters which analyzers run** (ADR-0013, user-reported bug fix:
+  `--profile minimal` and `--profile full`/`enterprise` gave byte-identical results because
+  `ScanEngine.scan()`'s analyzer-selection branch ran `this.registry.list()` unconditionally
+  whenever no explicit `analyzers` id list was given — `profile` was stored on the result but never
+  used to select analyzers). `packages/core/src/analyzer/profiles.ts` adds `PROFILE_CATEGORIES`
+  (profile -> `AnalyzerCategory[]`); `ScanEngine.scan()` now filters `registry.list()` by it unless
+  an explicit `analyzers` id list is supplied (which still bypasses profile filtering entirely,
+  unchanged). No `ScanProfile`/`AnalyzerCategory`/`AnalyzerConfig`/`ScanOptions` shape change.
+  `packages/cli` and `packages/api` needed no wiring change (both already just pass `profile`
+  through), but `packages/api/src/scan/run-scan.ts`'s hardcoded `profile: "minimal"` was bumped to
+  `"full"` — it takes no profile from the request yet, and "minimal" would have silently dropped
+  it to architecture-only analyzers, breaking its own existing secrets-detection tests. Five new
+  tests in `tests/core/scan-engine.test.ts` cover each profile's actual category set plus the
+  explicit-analyzers bypass; three pre-existing tests whose fixture analyzers were `quality`-
+  category under a `minimal`/hardcoded config were updated to a profile that actually covers
+  `quality` (`standard`/`full`), since they were unintentionally relying on the bug being fixed
+  here. `pnpm build`/`typecheck`/`test`/`lint` clean (154/154 tests, up from 149).
+
 ## In-progress components
 
 - **`@code-analyzer/api`** — a new HTTP API package exposing the existing `AnalyzerClient`/
@@ -324,7 +342,7 @@ None.
 
 ## Known architectural decisions
 
-- See `docs/decisions/ADR-0001-monorepo-package-architecture.md` through `ADR-0009`.
+- See `docs/decisions/ADR-0001-monorepo-package-architecture.md` through `ADR-0013`.
 - `ProjectIndexer.index()` gains a required `diagnostics: readonly Diagnostic[]` field, reusing the
   existing `Diagnostic` type rather than a new one, so parser-stage `ParseError`s and file-size
   skips reach `ScanResult.diagnostics` for the first time instead of only `logger.debug()`:

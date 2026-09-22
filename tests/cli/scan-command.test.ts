@@ -36,7 +36,9 @@ describe("code-analyzer scan", () => {
 
   it("registers the built-in analyzers and reports a real finding on a fixture with an actual issue", async () => {
     const root = path.join(__dirname, "../../fixtures/architecture/circular-import/positive");
-    const outcome = await runScanCommand(parseArgs(["scan", root, "--format", "json"]));
+    // --profile full: architecture/unresolved-import and quality/unused-export are asserted below
+    // too, and the default "minimal" profile only runs the architecture category (ADR-0013).
+    const outcome = await runScanCommand(parseArgs(["scan", root, "--format", "json", "--profile", "full"]));
 
     expect(outcome.exitCode).toBe(0);
     expect(outcome.result?.scan.analyzersRun).toEqual(
