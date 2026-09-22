@@ -12,9 +12,14 @@ after reviewing the two implementation-time design flags below). Phase 0/1/2/3 w
 previously. See `docs/tasks/phase-4-call-graph.md` for the task scope — all 9 checklist steps are
 complete: `AnalyzerContext.graphs.callGraph` was already additive (no ADR needed), parser-side
 call-site extraction, `buildCallGraph` and its `graphProjectIndexer` wiring, fixtures, unit tests,
-an end-to-end test, and a clean `pnpm build`/`typecheck`/`test`/`lint` (149/149 passing). Phase 5
-(Taint Graph) has **not** been drafted or started — that remains a separate, explicit human
-go-ahead per this file's opening rule, not implied by Phase 4's closure.
+an end-to-end test, and a clean `pnpm build`/`typecheck`/`test`/`lint` (149/149 passing).
+
+**Phase 5 — Taint Graph** (human go-ahead: "record the go-ahead and start the EdgeRelationType
+ADR", amit13091992@gmail.com, 2026-09-22) is **scoped, not yet implemented**. See
+`docs/tasks/phase-5-taint-graph.md` for the task doc (11-step checklist). Per that doc's own
+checklist step 1, implementation does not start until the `EdgeRelationType` ADR (whether to add a
+new `"FLOWS_TO"` value vs. reusing `"CALLS"`, and where reconstructed `DataFlow[]` live) is written
+and reviewed.
 
 **Design decisions confirmed at Phase 4 close-out** (both flagged by the implementing agents as
 worth a second look, both accepted as-is, no rework needed):
@@ -496,7 +501,8 @@ real `graphProjectIndexer`, the first `@code-analyzer/analyzers` rules
 (`docs/tasks/first-graph-analyzers.md`), registering them against `scan`'s own registry, coverage
 ingestion + quality analyzers (ADR-0010 Track A/B1), the `@code-analyzer/api` HTTP layer, and Phase 4
 (`docs/tasks/phase-4-call-graph.md`, Call Graph) are all **implemented and tested**. Phase 5 (Taint
-Graph) is **not** drafted — it needs its own explicit human go-ahead first, same as Phase 4 did
-(see Current phase). Also pending human review/decision: the CLI/API being wired into any CI/CD
+Graph, `docs/tasks/phase-5-taint-graph.md`) has human go-ahead and is scoped, with implementation
+gated on its `EdgeRelationType` ADR landing first (see Current phase). Also pending human
+review/decision: the CLI/API being wired into any CI/CD
 adapter or published, and — if desired — Python Module Graph resolution, Python Call Graph, or a
 third language, each scoped as their own follow-up tasks.

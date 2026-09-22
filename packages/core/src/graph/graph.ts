@@ -15,7 +15,8 @@ export type EdgeRelationType =
   | "CALLS"
   | "EXTENDS"
   | "IMPLEMENTS"
-  | "DEPENDS_ON";
+  | "DEPENDS_ON"
+  | "FLOWS_TO";
 
 /**
  * Confidence in a resolved relationship, most important for CALLS edges over dynamic JS/TS
