@@ -200,4 +200,37 @@ required for wiring it (per the scoping doc's own finding, restated here for com
   fixtures/tests (steps 6–8), and green `pnpm build && pnpm typecheck && pnpm test` (step 9) before
   `docs/project-status.md` is updated, and that update itself requires human sign-off (Section 49),
   not an agent's unilateral call. This ADR being accepted only clears checklist steps 1–2.
+
+## Addendum (2026-09-22): `TaintFlowEdgeData` relocated to `packages/core`
+
+During implementation of the first `security/*` rule (`security/sql-injection`), the analyzer
+initially re-declared a local copy of `TaintFlowEdgeData` (defined in `packages/graph/src/
+taint-graph.ts` per Decision §2's original plan) to avoid adding an `packages/analyzers` →
+`packages/graph` dependency. Architecture review during that rule's review pass found this
+reasoning didn't hold: `packages/graph` already depends on the sibling package `packages/parser`
+with the opposite reasoning documented inline (ADR-0001 requires every package depend on `core`,
+it does not forbid one non-core package depending on another's exported contract), and `packages/
+graph` does not depend on `packages/analyzers`, so `analyzers → graph` would have created zero
+cycle risk either way. The duplicate was also a real Section 35.12 "parallel abstraction" risk: a
+later shape change to the graph package's `TaintFlowEdgeData` would not have failed type-checking
+in the duplicate, only surfaced (if at all) as a runtime/test mismatch.
+
+**Amended decision**: `TaintFlowEdgeData` now lives in `packages/core/src/graph/graph.ts`, next to
+`EdgeCertainty` — not in `packages/graph/src/taint-graph.ts` as this ADR originally described.
+`packages/graph/src/taint-graph.ts` imports it from `@code-analyzer/core` and re-exports it from
+`packages/graph/src/index.ts` for existing/expected consumers of that entry point.
+`packages/analyzers/src/security/sql-injection.ts` imports the real type directly from
+`@code-analyzer/core`; its local duplicate was deleted.
+
+This is additive and non-breaking: `TaintFlowEdgeData` is built entirely from types already in
+`core` (`TaintSourceKind`, `TaintSinkKind`, plus primitives), `packages/core/package.json` still has
+zero `@code-analyzer/*` dependencies, and no consumer's import path was broken (re-exported from
+`packages/graph`, not removed from it). No new `EdgeRelationType` member, `Graph`/`GraphEdge`
+interface change, or `AnalyzerContext` field is introduced by this addendum — only the one
+interface's home package changes. Verified via `pnpm build`/`typecheck`/`test`/`lint` clean
+(188/188 tests) at the time of this addendum.
+
+This addendum, not a new ADR number, is used because the type's existence, shape, and purpose were
+already decided in this ADR (Decision §2) — only which package hosts its definition changed, a
+narrower correction to this ADR's own stated plan rather than a new design decision.
 </content>

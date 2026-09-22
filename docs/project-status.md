@@ -25,12 +25,47 @@ reusing the Call Graph's `CALLS` edges/`findPaths` for reachability and certaint
 `fixtures/graph/taint-links/`, unit tests, an end-to-end test through a real `AnalyzerClient`, and a
 clean `pnpm build`/`typecheck`/`test`/`lint` (175/175 passing).
 
-**Checklist step 11 — the first real `security/*` rule (e.g. SQL/command injection) — is
-explicitly out of scope for this closure.** It is a separate task gated on Section 47's full
-enhanced review path (implementation → unit tests → security fixtures → regression tests →
-architecture review → security review) and has not been started. Phase 5 as closed here delivers
-the Taint Graph plumbing only, same precedent as Phase 4 closing before any analyzer consumed
-`callGraph`.
+**Checklist step 11 — the first real `security/*` rule** (go-ahead: "start the sql injection rule",
+amit13091992@gmail.com, 2026-09-22) is **complete**: `security/sql-injection`
+(`packages/analyzers/src/security/sql-injection.ts`) walks `AnalyzerContext.graphs.taintGraph`'s
+`FLOWS_TO` edges, reporting a `critical`-severity finding (confidence scaled by Call Graph edge
+certainty) for an unsanitized flow into a SQL sink, and a `low`-severity finding (never fully
+suppressed) when a recognized sanitizer sits between the source and sink in program order. It went
+through this repo's full Section 47 enhanced review path: implementation → unit tests → security
+fixtures (`fixtures/analyzers/security/sql-injection/{positive,sanitized,negative-safe-sink,
+known-limitation}/`) → regression tests → architecture review → security review, with one fix pass
+in between review and re-review addressing three findings (see below) before both re-reviews
+cleared it. `pnpm build`/`typecheck`/`test`/`lint` clean, 188/188 tests passing (up from 175).
+
+**Review-driven fixes applied before sign-off:**
+- **Sanitizer-detection soundness** (security review, High): the original same-function check
+  treated "a recognized sanitizer call exists anywhere in the function" as sufficient to downgrade
+  severity — a `parseInt()` call unrelated to the tainted value could silently mask a real
+  `critical` finding as `low`. Fixed: same-function detection now requires the sanitizer call
+  site's source position to fall strictly between the source and sink call sites' offsets (real
+  program order, not co-occurrence); missing position data fails toward `sanitized: false`
+  (critical), never guesses toward safety (ADR-0004). Cross-function (path-level) detection remains
+  a deliberately weaker "sanitizer exists somewhere on the resolved Call Graph path" signal,
+  documented in code as an accepted, in-scope-for-Phase-5 limitation (no interprocedural
+  points-to/alias analysis, per `docs/tasks/phase-5-taint-graph.md`'s Non-goals) — re-reviewed and
+  confirmed the residual gap (a sanitizer positioned between source/sink offsets by coincidence,
+  applied to an unrelated variable) is honestly documented, not silently hidden, and low-impact
+  since findings are downgraded, never suppressed.
+- **Type duplication** (architecture review, High): the analyzer originally re-declared a local
+  copy of `TaintFlowEdgeData` instead of importing it, to avoid an `analyzers` → `graph` package
+  dependency — reasoning the reviewer showed didn't hold (`packages/graph` already depends on the
+  sibling `packages/parser` with the opposite reasoning documented inline). Fixed:
+  `TaintFlowEdgeData` was relocated to `packages/core/src/graph/graph.ts` (both `packages/graph`
+  and `packages/analyzers` already depend on `core`); documented as an addendum to ADR-0014 rather
+  than a new ADR, since only the type's host package changed, not its shape or purpose.
+- **Zero-findings over-confidence risk** (both reviews, High): a scan with zero
+  `security/sql-injection` findings gave no signal that this means "no match against a small fixed
+  signature list," not "verified safe." Fixed: the analyzer now always emits one `info`-severity
+  `Diagnostic` per scan (every code path, not just when findings exist) stating the fixed scope;
+  confirmed this renders in the HTML report's existing Diagnostics section, not just structurally
+  present in `ScanResult.diagnostics`.
+
+Both fixes were independently re-reviewed (not re-verified only by the fixing agent) and cleared.
 
 **Design decisions confirmed at Phase 4 close-out** (both flagged by the implementing agents as
 worth a second look, both accepted as-is, no rework needed):
@@ -341,8 +376,16 @@ imports — confirmed empirically, not assumed; see technical debt below.
   parser → Call Graph → Taint Graph pipeline over each fixture, and an end-to-end test through a
   real `AnalyzerClient` with a placeholder analyzer that only reports the `FLOWS_TO` edge count (no
   vulnerability judgment). `pnpm build`/`typecheck`/`test`/`lint` clean, 175/175 tests passing (up
-  from 169). **No `security/*` rule was implemented** — that is explicitly out of scope for this
-  phase's closure, gated on Section 47's full review path, and is the next separate task.
+  from 169).
+
+- **`security/sql-injection`** (`packages/analyzers/src/security/sql-injection.ts`, Phase 5
+  checklist step 11): the first real `security/*` rule, built on the Taint Graph above. See the
+  Current phase section for full detail — implementation, unit tests, security fixtures,
+  regression tests, architecture review, security review, and a fix pass addressing three findings
+  (sanitizer-detection soundness, `TaintFlowEdgeData` type duplication, zero-findings over-
+  confidence risk) are all complete and independently re-reviewed. `pnpm build`/`typecheck`/
+  `test`/`lint` clean, 188/188 tests passing (up from 175). ADR-0014 gained an addendum documenting
+  the `TaintFlowEdgeData` relocation to `packages/core`.
 
 - **`ScanProfile` now actually filters which analyzers run** (ADR-0013, user-reported bug fix:
   `--profile minimal` and `--profile full`/`enterprise` gave byte-identical results because
@@ -531,11 +574,12 @@ Phase 1 (`docs/tasks/phase-1-repository-discovery.md`), the CLI & Reporting task
 real `graphProjectIndexer`, the first `@code-analyzer/analyzers` rules
 (`docs/tasks/first-graph-analyzers.md`), registering them against `scan`'s own registry, coverage
 ingestion + quality analyzers (ADR-0010 Track A/B1), the `@code-analyzer/api` HTTP layer, Phase 4
-(`docs/tasks/phase-4-call-graph.md`, Call Graph), and Phase 5 (`docs/tasks/phase-5-taint-graph.md`,
-Taint Graph, ADR-0014) are all **implemented and tested**. The first `security/*` rule (SQL
-injection, command injection, etc.) built on top of the Taint Graph is **not started** — it needs
-its own explicit human go-ahead and follows Section 47's full enhanced review path, same as any
-taint-touching change (see Current phase). Also pending human review/decision: the CLI/API being
-wired into any CI/CD
+(`docs/tasks/phase-4-call-graph.md`, Call Graph), Phase 5 (`docs/tasks/phase-5-taint-graph.md`,
+Taint Graph, ADR-0014), and the first `security/*` rule (`security/sql-injection`) are all
+**implemented and tested**, the last having gone through the full Section 47 enhanced review path
+(see Current phase). Command injection, XSS, or other rules on additional recognized sink kinds
+(`eval`/`shell-command`, `html-render`) are natural follow-ups, each its own task through the same
+review path — not started. Also pending human review/decision: the CLI/API being wired into any
+CI/CD
 adapter or published, and — if desired — Python Module Graph resolution, Python Call Graph, or a
 third language, each scoped as their own follow-up tasks.

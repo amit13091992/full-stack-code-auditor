@@ -30,7 +30,7 @@ describe("first-graph-analyzers end-to-end: real discovery -> parse -> graph -> 
   it("runs circular-import, unresolved-import, and unused-export together through a real AnalyzerRegistry", async () => {
     const registry = new InMemoryRegistry();
     registerBuiltinAnalyzers(registry);
-    expect(registry.list()).toHaveLength(8);
+    expect(registry.list()).toHaveLength(9);
 
     const root = path.resolve(__dirname, "../../fixtures/architecture/circular-import/positive");
     const client = new AnalyzerClient({

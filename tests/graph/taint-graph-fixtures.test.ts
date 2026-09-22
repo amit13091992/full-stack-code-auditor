@@ -66,6 +66,17 @@ describe("buildTaintGraph over real parsed fixtures", () => {
     expect(edges[0]?.data?.sinkKind).toBe("sql");
   });
 
+  it("regression: a sanitizer call unrelated to the tainted value (called before the source is read) does not mark the flow sanitized", async () => {
+    const { modules, functions, classes } = await parseOne("unrelated-sanitizer-call.ts");
+    const callGraph = buildCallGraph(modules, functions, classes);
+    const taintGraph = buildTaintGraph(functions, callGraph);
+
+    const handler = functions.find((f) => f.name === "handleUnrelatedSanitizer")!;
+    const edges = taintGraph.query({ edgeType: "FLOWS_TO", fromNodeId: functionNodeId(handler.id) });
+    expect(edges).toHaveLength(1);
+    expect(edges[0]?.data?.sanitized).toBe(false);
+  });
+
   it("produces no FLOWS_TO edge when a source is only ever passed to a safe, unrecognized sink", async () => {
     const { modules, functions, classes } = await parseOne("false-positive-safe-sink.ts");
     const callGraph = buildCallGraph(modules, functions, classes);

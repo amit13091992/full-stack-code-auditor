@@ -1,4 +1,5 @@
 import type { EdgeId, Metadata, NodeId } from "../domain/ids.js";
+import type { TaintSinkKind, TaintSourceKind } from "../domain/data-flow.js";
 
 /**
  * The internal graph abstraction referenced in Section 2/3/4/5: an in-process representation
@@ -52,6 +53,22 @@ export interface GraphQuery {
 export interface PathResult {
   readonly nodes: readonly GraphNode[];
   readonly edges: readonly GraphEdge[];
+}
+
+/**
+ * `FLOWS_TO` edge payload produced by the Taint Graph builder (`@code-analyzer/graph`,
+ * `packages/graph/src/taint-graph.ts`) and consumed by security analyzers
+ * (`packages/analyzers/src/security/*`). Lives in `core` — built entirely from types already here,
+ * and read by both `packages/graph` and `packages/analyzers`, which both already depend on `core`
+ * (ADR-0001; no `analyzers` -> `graph` dependency needed for this shape).
+ */
+export interface TaintFlowEdgeData {
+  readonly sourceKind: TaintSourceKind;
+  readonly sinkKind: TaintSinkKind;
+  /** Every matched source/sanitizer/sink signature name involved, for traceability. */
+  readonly sourceSignatures: readonly string[];
+  readonly sinkSignatures: readonly string[];
+  readonly sanitized: boolean;
 }
 
 /** Read/write contract for any graph implementation (module graph, call graph, taint graph, ...). */

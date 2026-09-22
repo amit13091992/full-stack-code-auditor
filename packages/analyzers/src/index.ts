@@ -16,6 +16,7 @@ import { cyclomaticComplexityAnalyzer } from "./quality/cyclomatic-complexity.js
 import { duplicationAnalyzer } from "./quality/duplication.js";
 import { maintainabilityIndexAnalyzer } from "./quality/maintainability-index.js";
 import { lintStyleRulesAnalyzer } from "./quality/lint-style-rules.js";
+import { sqlInjectionAnalyzer } from "./security/sql-injection.js";
 
 export { circularImportAnalyzer } from "./circular-import.js";
 export { unresolvedImportAnalyzer } from "./unresolved-import.js";
@@ -25,6 +26,7 @@ export { cyclomaticComplexityAnalyzer } from "./quality/cyclomatic-complexity.js
 export { duplicationAnalyzer } from "./quality/duplication.js";
 export { maintainabilityIndexAnalyzer } from "./quality/maintainability-index.js";
 export { lintStyleRulesAnalyzer } from "./quality/lint-style-rules.js";
+export { sqlInjectionAnalyzer } from "./security/sql-injection.js";
 
 /** All analyzers this package currently ships, in a stable order. */
 export function builtinAnalyzers() {
@@ -37,6 +39,7 @@ export function builtinAnalyzers() {
     duplicationAnalyzer,
     maintainabilityIndexAnalyzer,
     lintStyleRulesAnalyzer,
+    sqlInjectionAnalyzer,
   ] as const;
 }
 

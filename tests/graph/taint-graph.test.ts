@@ -6,6 +6,14 @@ function loc(path: string): SourceLocation {
   return { fileId: path as FileId, path };
 }
 
+function locAt(path: string, offset: number): SourceLocation {
+  return {
+    fileId: path as FileId,
+    path,
+    range: { start: { offset, line: 0, column: offset }, end: { offset: offset + 1, line: 0, column: offset + 1 } },
+  };
+}
+
 function callSite(overrides: Partial<CallSite>): CallSite {
   return {
     calleeKind: "identifier",
@@ -52,6 +60,47 @@ describe("buildTaintGraph", () => {
     expect(edge?.data?.sanitized).toBe(false);
     expect(edge?.data?.sourceKind).toBe("query-parameter");
     expect(edge?.data?.sinkKind).toBe("sql");
+  });
+
+  it("regression: does not mark sanitized when a recognized sanitizer call sits outside the source-sink window (mere co-occurrence, not on-path)", () => {
+    const source = callSite({ calleeKind: "member", calleeName: "toString", receiverText: "req.query.id", location: locAt("f.ts", 20) });
+    const sanitizer = callSite({ calleeKind: "identifier", calleeName: "parseInt", location: locAt("f.ts", 10) });
+    const sink = callSite({ calleeKind: "member", calleeName: "query", receiverText: "db", location: locAt("f.ts", 30) });
+    const handler = fn({ id: "f6", name: "handler", calls: [sanitizer, source, sink] });
+    const callGraph = new InMemoryGraph();
+    const taintGraph = buildTaintGraph([handler], callGraph);
+
+    const id = edgeId("FLOWS_TO", functionNodeId(handler.id), functionNodeId(handler.id));
+    const edge = taintGraph.getEdge(id);
+    expect(edge).toBeDefined();
+    expect(edge?.data?.sanitized).toBe(false);
+  });
+
+  it("marks sanitized: true only when the sanitizer call site's location is actually between the source and sink call sites", () => {
+    const source = callSite({ calleeKind: "member", calleeName: "toString", receiverText: "req.query.id", location: locAt("f.ts", 10) });
+    const sanitizer = callSite({ calleeKind: "identifier", calleeName: "parseInt", location: locAt("f.ts", 20) });
+    const sink = callSite({ calleeKind: "member", calleeName: "query", receiverText: "db", location: locAt("f.ts", 30) });
+    const handler = fn({ id: "f7", name: "handler", calls: [source, sanitizer, sink] });
+    const callGraph = new InMemoryGraph();
+    const taintGraph = buildTaintGraph([handler], callGraph);
+
+    const id = edgeId("FLOWS_TO", functionNodeId(handler.id), functionNodeId(handler.id));
+    const edge = taintGraph.getEdge(id);
+    expect(edge).toBeDefined();
+    expect(edge?.data?.sanitized).toBe(true);
+  });
+
+  it("regression: does not guess sanitized when call-site ordering cannot be determined (no source range on the call sites)", () => {
+    // reqQuerySite/dbQuerySite/sanitizerSite below all use the shared `callSite()` default location,
+    // which carries no `range` — order cannot be established, so this must fail toward unsanitized.
+    const handler = fn({ id: "f8", name: "handler", calls: [reqQuerySite, sanitizerSite, dbQuerySite] });
+    const callGraph = new InMemoryGraph();
+    const taintGraph = buildTaintGraph([handler], callGraph);
+
+    const id = edgeId("FLOWS_TO", functionNodeId(handler.id), functionNodeId(handler.id));
+    const edge = taintGraph.getEdge(id);
+    expect(edge).toBeDefined();
+    expect(edge?.data?.sanitized).toBe(false);
   });
 
   it("produces a FLOWS_TO edge across two functions connected by a direct CALLS edge", () => {
