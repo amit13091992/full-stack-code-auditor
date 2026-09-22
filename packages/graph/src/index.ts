@@ -10,3 +10,5 @@ export { buildCallGraph } from "./call-graph.js";
 export { graphProjectIndexer } from "./project-indexer.js";
 export { moduleNodeId, symbolNodeId, functionNodeId, classNodeId, edgeId } from "./node-ids.js";
 export type { GraphNodeType } from "./node-ids.js";
+export { TAINT_SIGNATURES, matchesCallSite } from "./taint-signatures.js";
+export type { TaintSignature, TaintSignatureKind, CallShapeMatch } from "./taint-signatures.js";
