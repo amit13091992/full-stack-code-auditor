@@ -326,6 +326,14 @@ imports — confirmed empirically, not assumed; see technical debt below.
   `quality` (`standard`/`full`), since they were unintentionally relying on the bug being fixed
   here. `pnpm build`/`typecheck`/`test`/`lint` clean (154/154 tests, up from 149).
 
+- **`codegraph-scan scan` (no `--profile` flag) now defaults to `standard`, not `minimal`**
+  (follow-up to ADR-0013, user-reported). Once profile filtering above actually took effect, the
+  CLI's pre-existing `profile ?? "minimal"` default (`packages/cli/src/commands/scan.ts`) silently
+  dropped every `quality` finding from a bare `scan .` — a real report went from 1003 findings
+  across 292 files to 64 across 60 with no flag change on the caller's part. `standard` (
+  `architecture` + `quality`) restores the coverage users of the plain command were already relying
+  on; `minimal` (architecture-only) is still available via an explicit `--profile minimal`.
+
 ## In-progress components
 
 - **`@code-analyzer/api`** — a new HTTP API package exposing the existing `AnalyzerClient`/

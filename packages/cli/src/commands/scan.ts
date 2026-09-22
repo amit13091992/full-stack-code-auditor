@@ -85,7 +85,7 @@ export async function runScanCommand(args: ParsedArgs): Promise<ScanCommandResul
     return { exitCode: 1, errorMessage: `Unknown --format "${format}". Expected one of: ${VALID_FORMATS.join(", ")}` };
   }
 
-  const profile = (args.flags.profile ?? "minimal") as ScanProfile;
+  const profile = (args.flags.profile ?? "standard") as ScanProfile;
   if (!VALID_PROFILES.includes(profile)) {
     return { exitCode: 1, errorMessage: `Unknown --profile "${profile}". Expected one of: ${VALID_PROFILES.join(", ")}` };
   }
