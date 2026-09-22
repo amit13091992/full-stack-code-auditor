@@ -38,7 +38,7 @@ describe("graphProjectIndexer", () => {
     expect(graphs.moduleGraph).toBeDefined();
     expect(graphs.symbolGraph).toBeDefined();
     expect(graphs.callGraph).toBeDefined();
-    expect(graphs.taintGraph).toBeUndefined();
+    expect(graphs.taintGraph).toBeDefined();
 
     // The moduleGraph has one node per parsed module.
     expect(graphs.moduleGraph!.nodeCount).toBe(indexed.modules.length);
@@ -53,6 +53,8 @@ describe("graphProjectIndexer", () => {
       symbolGraphEdges: graphs.symbolGraph!.edgeCount,
       callGraphNodes: graphs.callGraph!.nodeCount,
       callGraphEdges: graphs.callGraph!.edgeCount,
+      taintGraphNodes: graphs.taintGraph!.nodeCount,
+      taintGraphEdges: graphs.taintGraph!.edgeCount,
     });
   });
 });
