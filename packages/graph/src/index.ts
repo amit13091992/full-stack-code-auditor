@@ -7,6 +7,8 @@ export { InMemoryGraph } from "./in-memory-graph.js";
 export { buildModuleGraph } from "./module-graph.js";
 export { buildSymbolGraph } from "./symbol-graph.js";
 export { buildCallGraph } from "./call-graph.js";
+export { buildTaintGraph } from "./taint-graph.js";
+export type { TaintFlowEdgeData } from "./taint-graph.js";
 export { graphProjectIndexer } from "./project-indexer.js";
 export { moduleNodeId, symbolNodeId, functionNodeId, classNodeId, edgeId } from "./node-ids.js";
 export type { GraphNodeType } from "./node-ids.js";
